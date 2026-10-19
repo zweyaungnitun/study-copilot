@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
@@ -13,7 +13,7 @@ def test_intake_deadline_validation():
         IntakeProfileRequest(
             user_id="u123",
             goal="Master Linear Algebra",
-            deadline=datetime.utcnow() - timedelta(days=2),
+            deadline=datetime.now(timezone.utc) - timedelta(days=2),
             hours_per_day=2.0,
         )
 
@@ -21,7 +21,7 @@ def test_intake_deadline_validation():
     req = IntakeProfileRequest(
         user_id="u123",
         goal="Master Linear Algebra",
-        deadline=datetime.utcnow() + timedelta(days=30),
+        deadline=datetime.now(timezone.utc) + timedelta(days=30),
         hours_per_day=2.5,
     )
     assert req.hours_per_day == 2.5

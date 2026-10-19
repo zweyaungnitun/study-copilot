@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
@@ -18,7 +18,7 @@ async def test_full_onboarding_and_intake_flow(client: AsyncClient):
     assert user_id is not None
 
     # 2. Save intake profile
-    deadline = (datetime.utcnow() + timedelta(days=60)).isoformat()
+    deadline = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
     profile_payload = {
         "user_id": user_id,
         "goal": "Master Machine Learning Foundations",
