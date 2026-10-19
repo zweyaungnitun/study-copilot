@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    """Centralized LLM client supporting Anthropic Claude with local offline fallback."""
+    """Centralized LLM client supporting Google AI Studio (Gemini) with local offline fallback."""
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.ANTHROPIC_API_KEY
-        self.default_model = settings.ANTHROPIC_MODEL
-        self.haiku_model = settings.ANTHROPIC_HAIKU_MODEL
+        self.api_key = api_key or settings.GOOGLE_API_KEY
+        self.default_model = settings.GEMINI_MODEL
+        self.fast_model = settings.GEMINI_FAST_MODEL
 
     async def generate_text(
         self,
@@ -24,33 +24,36 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = 1500,
     ) -> str:
-        """Call Claude API or provide intelligent fallback if API key is not configured."""
-        if self.api_key and self.api_key not in ["your_anthropic_api_key_here", "mock-key-for-local-dev"]:
+        """Call Gemini API or provide intelligent fallback if API key is not configured."""
+        if self.api_key and self.api_key not in ["your_google_api_key_here", "mock-key-for-local-dev"]:
             try:
                 headers = {
-                    "x-api-key": self.api_key,
-                    "anthropic-version": "2023-06-01",
+                    "x-goog-api-key": self.api_key,
                     "content-type": "application/json",
                 }
-                messages = [{"role": "user", "content": prompt}]
                 payload: Dict[str, Any] = {
-                    "model": model or self.default_model,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "messages": messages,
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens,
+                    },
                 }
                 if system_prompt:
-                    payload["system"] = system_prompt
+                    payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
+                model_name = model or self.default_model
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
-                        "https://api.anthropic.com/v1/messages",
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
                         headers=headers,
                         json=payload,
                     )
                     resp.raise_for_status()
                     data = resp.json()
-                    return data["content"][0]["text"]
+                    return "".join(
+                        part.get("text", "")
+                        for part in data["candidates"][0]["content"]["parts"]
+                    )
             except Exception as e:
                 logger.warning(f"Live LLM call failed, falling back to heuristic generator: {e}")
 

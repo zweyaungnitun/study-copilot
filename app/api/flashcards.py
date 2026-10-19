@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.entities import CardReview, Chapter, Flashcard, Note
+from app.models.entities import CardReview, Chapter, Flashcard, Note, Roadmap, Subject
 from app.schemas.flashcard import (
     FlashcardGenerateRequest,
     FlashcardReviewRequest,
@@ -63,14 +63,23 @@ async def generate_flashcards(
 @router.get("/due", response_model=List[FlashcardSchema])
 async def get_due_flashcards(
     chapter_id: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None, description="Restrict to cards from this user's roadmaps"),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve flashcards due for SM-2 review."""
-    now = datetime.utcnow()
+    from datetime import timezone
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     stmt = select(Flashcard).where(Flashcard.next_review <= now)
     if chapter_id:
         stmt = stmt.where(Flashcard.chapter_id == chapter_id)
+    if user_id:
+        owned = (
+            select(Chapter.id)
+            .join(Subject, Chapter.subject_id == Subject.id)
+            .join(Roadmap, Subject.roadmap_id == Roadmap.id)
+            .where(Roadmap.user_id == user_id)
+        )
+        stmt = stmt.where(Flashcard.chapter_id.in_(owned))
     stmt = stmt.order_by(Flashcard.next_review.asc()).limit(limit)
 
     res = await db.execute(stmt)

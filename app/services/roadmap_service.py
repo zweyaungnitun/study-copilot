@@ -21,7 +21,8 @@ class RoadmapService:
     @staticmethod
     def calculate_available_hours(deadline: datetime, hours_per_day: float) -> float:
         """TotalAvailableHours = (DaysUntilDeadline * HoursPerDay) * 0.8."""
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         deadline_naive = deadline.replace(tzinfo=None) if deadline.tzinfo else deadline
         days_remaining = max(1, (deadline_naive - now).days)
         total_hours = (days_remaining * hours_per_day) * 0.8

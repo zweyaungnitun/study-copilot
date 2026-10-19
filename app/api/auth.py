@@ -62,3 +62,15 @@ async def login(request: UserLoginRequest, db: AsyncSession = Depends(get_db)):
         username=user.username,
         token=token,
     )
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Retrieve current user details."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return user

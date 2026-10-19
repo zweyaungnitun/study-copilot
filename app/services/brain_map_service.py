@@ -39,7 +39,8 @@ class BrainMapService:
         """Construct Cytoscape graph nodes and prerequisite edges with retention forecast."""
         nodes: List[BrainMapNode] = []
         edges: List[BrainMapEdge] = []
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         total_retention = 0.0
         at_risk_count = 0

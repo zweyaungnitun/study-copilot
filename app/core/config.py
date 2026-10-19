@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./studypilot.db"
 
     # AI / LLM Configuration
-    ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
-    ANTHROPIC_HAIKU_MODEL: str = "claude-3-5-haiku-20241022"
+    GOOGLE_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_FAST_MODEL: str = "gemini-2.5-flash-lite"
 
     # Storage & Persistence
     CHROMA_PERSIST_DIR: str = "./chroma_data"

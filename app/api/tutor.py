@@ -31,6 +31,15 @@ async def tutor_chat(request: TutorChatRequest, db: AsyncSession = Depends(get_d
             if note:
                 note_content = note.detailed_content
 
+    # Check uploaded materials RAG store
+    from app.services.rag_service import RAGService
+    rag_result = RAGService.query_user_knowledge(user_id=request.user_id, query=request.message)
+    if rag_result.get("is_grounded_in_notes") and rag_result.get("context_text"):
+        if note_content:
+            note_content = f"{note_content}\n\n{rag_result['context_text']}"
+        else:
+            note_content = rag_result["context_text"]
+
     response_data = await TutorService.generate_response(
         user_message=request.message,
         chapter_title=chapter_title,
@@ -38,6 +47,8 @@ async def tutor_chat(request: TutorChatRequest, db: AsyncSession = Depends(get_d
         hint_level=request.hint_level,
         mode=request.mode,
     )
+    if rag_result.get("is_grounded_in_notes"):
+        response_data["source"] = "📚 From your notes"
 
     # If misconception was detected and chapter exists, record in Mistake notebook
     if response_data.get("detected_misconception") and request.chapter_id:

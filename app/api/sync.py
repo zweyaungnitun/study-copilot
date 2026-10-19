@@ -58,9 +58,10 @@ async def generate_offline_bundle(user_id: str = Query(...), db: AsyncSession = 
         for c in fc_res.scalars().all()
     ]
 
+    from datetime import timezone
     return {
         "version": "1.0",
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "user_id": user_id,
         "notes": notes,
         "flashcards": cards,
@@ -96,8 +97,9 @@ async def sync_offline_results(
 
     await db.flush()
 
+    from datetime import timezone
     return {
         "status": "success",
         "synced_reviews": reviews_synced,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

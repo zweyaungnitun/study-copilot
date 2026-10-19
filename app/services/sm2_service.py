@@ -40,7 +40,8 @@ class SM2Engine:
     ) -> SM2Result:
         """Calculate next review schedule based on quality score (0 to 5)."""
         if review_time is None:
-            review_time = datetime.utcnow()
+            from datetime import timezone
+            review_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Clamp quality to 0..5
         q = max(0, min(5, quality))

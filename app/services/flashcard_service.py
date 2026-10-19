@@ -1,6 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from app.services.llm_client import llm_client
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class FlashcardService:
@@ -43,7 +47,7 @@ Return a JSON array of objects:
                     "reps": 0,
                     "ease": 2.5,
                     "interval": 0,
-                    "next_review": datetime.utcnow(),
+                    "next_review": utcnow(),
                 })
         else:
             # Fallback cards
@@ -57,7 +61,7 @@ Return a JSON array of objects:
                     "reps": 0,
                     "ease": 2.5,
                     "interval": 0,
-                    "next_review": datetime.utcnow(),
+                    "next_review": utcnow(),
                 },
                 {
                     "type": "cloze",
@@ -68,7 +72,7 @@ Return a JSON array of objects:
                     "reps": 0,
                     "ease": 2.5,
                     "interval": 0,
-                    "next_review": datetime.utcnow(),
+                    "next_review": utcnow(),
                 },
                 {
                     "type": "truefalse",
@@ -79,7 +83,7 @@ Return a JSON array of objects:
                     "reps": 0,
                     "ease": 2.5,
                     "interval": 0,
-                    "next_review": datetime.utcnow(),
+                    "next_review": utcnow(),
                 },
             ]
 

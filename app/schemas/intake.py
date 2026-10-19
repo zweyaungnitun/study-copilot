@@ -17,8 +17,8 @@ class IntakeProfileRequest(BaseModel):
     @field_validator("deadline")
     @classmethod
     def validate_deadline_future(cls, v: datetime) -> datetime:
-        # Handle naive vs timezone-aware gracefully
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         v_naive = v.replace(tzinfo=None) if v.tzinfo else v
         if (v_naive - now).days < 1:
             raise ValueError("Target deadline must be in the future (minimum 1 day ahead).")

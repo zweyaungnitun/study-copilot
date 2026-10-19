@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
     Column,
@@ -16,6 +16,11 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+def utcnow() -> datetime:
+    """Return timezone-naive UTC timestamp for DB compatibility."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def generate_uuid() -> str:
     return str(uuid.uuid4())
 
@@ -27,7 +32,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=True, index=True)
     password_hash = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -51,7 +56,7 @@ class UserProfile(Base):
     weak_areas = Column(JSON, default=list)
     current_streak = Column(Integer, default=0)
     total_xp = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User", back_populates="profile")
 
@@ -63,7 +68,7 @@ class Roadmap(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     specialization = Column(String(255), nullable=False)
     total_estimated_hours = Column(Float, nullable=False, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     is_active = Column(Boolean, default=True)
 
     user = relationship("User", back_populates="roadmaps")
@@ -110,7 +115,7 @@ class Note(Base):
     detailed_content = Column(Text, nullable=False)
     exam_content = Column(Text, nullable=False)
     cheat_sheet = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     chapter = relationship("Chapter", back_populates="notes")
 
@@ -130,7 +135,7 @@ class Flashcard(Base):
     reps = Column(Integer, default=0)
     ease = Column(Float, default=2.5)
     interval = Column(Integer, default=0)
-    next_review = Column(DateTime, default=datetime.utcnow, index=True)
+    next_review = Column(DateTime, default=utcnow, index=True)
     last_quality = Column(Integer, nullable=True)
 
     chapter = relationship("Chapter", back_populates="flashcards")
@@ -143,7 +148,7 @@ class CardReview(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     flashcard_id = Column(String(36), ForeignKey("flashcards.id", ondelete="CASCADE"), nullable=False, index=True)
     quality = Column(Integer, nullable=False)
-    reviewed_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, default=utcnow)
     interval_before = Column(Integer, default=0)
     interval_after = Column(Integer, default=0)
     ease_before = Column(Float, default=2.5)
@@ -165,7 +170,7 @@ class MistakeRecord(Base):
     explanation = Column(Text, nullable=False)
     retest_date = Column(DateTime, nullable=False, index=True)
     resolved = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="mistakes")
     chapter = relationship("Chapter", back_populates="mistakes")
@@ -181,7 +186,7 @@ class StudySession(Base):
     cards_reviewed = Column(Integer, default=0)
     cards_correct = Column(Integer, default=0)
     tasks_completed = Column(JSON, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="sessions")
 
@@ -197,6 +202,6 @@ class MaterialUpload(Base):
     file_size_bytes = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
     status = Column(String(50), default="processed")  # pending, processing, processed, failed
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="materials")

@@ -26,3 +26,15 @@ def generate_token(user_id: str) -> str:
     random_str = secrets.token_urlsafe(32)
     timestamp = int(time.time())
     return f"sp_{user_id}_{timestamp}_{random_str}"
+
+
+def extract_user_id_from_token(token: str) -> Optional[str]:
+    """Extract user_id from bearer token."""
+    if not token:
+        return None
+    if token.startswith("Bearer "):
+        token = token[7:]
+    parts = token.split("_")
+    if len(parts) >= 4 and parts[0] == "sp":
+        return parts[1]
+    return None
