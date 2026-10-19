@@ -38,6 +38,29 @@ from app.schemas.brain_map import (
     BrainMapEdge,
     BrainMapResponse,
 )
+from app.schemas.material import (
+    MaterialUploadResponse,
+    RAGQueryRequest,
+    RAGQueryResponse,
+    RAGSourceItem,
+)
+from app.schemas.mistake import (
+    MistakeRecordSchema,
+    MistakeRecordCreate,
+    MistakeDrillQuestion,
+    MistakeDrillResponse,
+)
+from app.schemas.exam import (
+    ExamQuestion,
+    ExamGenerateRequest,
+    ExamGenerateResponse,
+    ExamSubmitRequest,
+    ExamEvaluationResponse,
+)
+from app.schemas.leaderboard import (
+    LeaderboardEntry,
+    LeaderboardResponse,
+)
 
 __all__ = [
     "UserRegisterRequest",
@@ -70,4 +93,19 @@ __all__ = [
     "BrainMapNode",
     "BrainMapEdge",
     "BrainMapResponse",
+    "MaterialUploadResponse",
+    "RAGQueryRequest",
+    "RAGQueryResponse",
+    "RAGSourceItem",
+    "MistakeRecordSchema",
+    "MistakeRecordCreate",
+    "MistakeDrillQuestion",
+    "MistakeDrillResponse",
+    "ExamQuestion",
+    "ExamGenerateRequest",
+    "ExamGenerateResponse",
+    "ExamSubmitRequest",
+    "ExamEvaluationResponse",
+    "LeaderboardEntry",
+    "LeaderboardResponse",
 ]
