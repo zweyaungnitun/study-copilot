@@ -65,3 +65,7 @@ out/
 # Documentation
 DOCS/
 docs/
+
+# SQLite WAL side files
+*.db-shm
+*.db-wal
