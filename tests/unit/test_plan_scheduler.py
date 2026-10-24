@@ -50,7 +50,8 @@ def test_buffers_final_review_and_mocks():
     assert plan.final_days == 2
     last = START + timedelta(days=19)
     assert "mock" in kinds_by_day[last] and "learn" not in kinds_by_day[last]
-    assert all("review" in kinds_by_day[d] for d in kinds_by_day if kinds_by_day[d] != {"buffer"})
+    assert "review" not in kinds_by_day[START]  # nothing to review on the first day
+    assert all("review" in kinds_by_day[d] for d in kinds_by_day if d != START and kinds_by_day[d] != {"buffer"})
     practice = [t for t in plan.tasks if t.kind == "practice"]
     assert {t.chapter_id for t in practice} == {"A0", "A1", "A2"}
 
@@ -61,12 +62,11 @@ def test_tracks_are_interleaved():
     assert set(first_day) == {"A", "B"}
 
 
-def test_review_block_follows_forecast():
-    plan = build_plan(chain("A", 2), START, START + timedelta(days=10), hours_per_day=2,
-                      review_forecast={START: 500, START + timedelta(days=1): 0})
+def test_review_block_starts_after_first_session():
+    plan = build_plan(chain("A", 2), START, START + timedelta(days=10), hours_per_day=2)
     reviews = {t.date: t.minutes for t in plan.tasks if t.kind == "review" and t.order == 0}
-    assert reviews[START] == 42  # capped at 35% of 120
-    assert reviews[START + timedelta(days=1)] == 24  # floor of 20%
+    assert START not in reviews
+    assert reviews[START + timedelta(days=1)] == 24  # 20% of 120
 
 
 def test_over_capacity_uses_buffers_then_reports():

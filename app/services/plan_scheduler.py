@@ -3,7 +3,7 @@
 Rules:
 - Days run from ``start`` up to the day before the deadline.
 - The last ~10% of days are final review + mock exams; every 7th other day is a buffer (slack).
-- Each study day starts with a flashcard-review block sized from the SM-2 due forecast (20-35% of the day).
+- Once learning has started, each study day opens with a review of earlier chapters (20% of the day).
 - Chapters are learned in prerequisite order, in sessions of at most ``session_max`` minutes; a short
   practice quiz follows each finished chapter. Parallel tracks are interleaved session by session.
 - If the plan does not fit, buffer days are used for learning, then the remainder is reported as
@@ -56,8 +56,8 @@ PRACTICE_MINUTES = 15
 MOCK_MINUTES = 60
 
 
-def review_reserve(cap: int, due_minutes: int) -> int:
-    return int(min(cap * 0.35, max(cap * 0.2, due_minutes)))
+REVIEW_SHARE = 0.2
+REVIEW_TITLE = "Review earlier chapters"
 
 
 def build_plan(
@@ -65,11 +65,9 @@ def build_plan(
     start: date,
     deadline: date,
     hours_per_day: float,
-    review_forecast: Optional[Dict[date, int]] = None,
     session_max: int = 50,
 ) -> Plan:
     cap = max(MIN_BLOCK, int(round(hours_per_day * 60)))
-    forecast = review_forecast or {}
     n = max(1, (deadline - start).days)
     days = [start + timedelta(days=i) for i in range(n)]
     final = max(1, round(n * 0.10)) if n >= 5 else 0
@@ -100,6 +98,9 @@ def build_plan(
                 started = [u for u in cands if parts.get(u.chapter_id)]
                 return (started or cands)[0]
         return None
+
+    def review_reserve() -> int:
+        return int(cap * REVIEW_SHARE) if parts else 0  # nothing to review before the first session
 
     def fill(day: date, avail: int, order: int) -> int:
         while pending_practice and avail >= PRACTICE_MINUTES:
@@ -140,8 +141,9 @@ def build_plan(
         return avail
 
     for d in study_days:
-        reserve = review_reserve(cap, forecast.get(d, 0))
-        tasks.append(Task(d, "review", "Flashcard review", reserve, order=0))
+        reserve = review_reserve()
+        if reserve:
+            tasks.append(Task(d, "review", REVIEW_TITLE, reserve, order=0))
         fill(d, cap - reserve, 1)
 
     # Out of study days: learning spills into the buffer days.
@@ -149,19 +151,21 @@ def build_plan(
     for d in buffer_days:
         if all(c in finished for c in remaining):
             break
-        reserve = review_reserve(cap, forecast.get(d, 0))
+        reserve = review_reserve()
         before = len(tasks)
         fill(d, cap - reserve, 1)
         if len(tasks) > before:
-            tasks.insert(before, Task(d, "review", "Flashcard review", reserve, order=0))
+            if reserve:
+                tasks.insert(before, Task(d, "review", REVIEW_TITLE, reserve, order=0))
             used_buffers.add(d)
     for d in buffer_days:
         if d not in used_buffers:
             tasks.append(Task(d, "buffer", "Buffer: catch up on anything missed, or rest", cap))
 
     for i, d in enumerate(final_days):
-        reserve = review_reserve(cap, forecast.get(d, 0))
-        tasks.append(Task(d, "review", "Flashcard review", reserve, order=0))
+        reserve = review_reserve()
+        if reserve:
+            tasks.append(Task(d, "review", REVIEW_TITLE, reserve, order=0))
         rest = cap - reserve
         if i >= len(final_days) - 2 and rest >= MOCK_MINUTES:  # mocks on the last two days
             tasks.append(Task(d, "mock", "Timed mock exam", MOCK_MINUTES, order=1))

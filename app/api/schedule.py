@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.entities import AppSetting, Chapter, Flashcard, ScheduledTask, User, UserProfile, utcnow
+from app.models.entities import AppSetting, Chapter, ScheduledTask, User, UserProfile, utcnow
 from app.schemas.schedule import ScheduleBuildRequest, ScheduleResponse, ScheduledTaskOut, TaskUpdate
 from app.services.llm_client import llm_client
 from app.services.plan_scheduler import Unit, build_plan
@@ -15,29 +15,13 @@ from app.services.track_service import TrackService
 
 router = APIRouter(prefix="/schedule", tags=["Study Schedule"])
 
-REVIEW_MINUTES_PER_CARD = 0.75
-
-
 def _day(d: date) -> datetime:
     return datetime(d.year, d.month, d.day)
 
 
-async def _review_forecast(db: AsyncSession, chapter_ids: List[str], start: date, days: int) -> Dict[date, int]:
-    """Minutes of flashcard review per day from SM-2 due dates (overdue cards land on day one)."""
-    if not chapter_ids:
-        return {}
-    rows = (await db.execute(select(Flashcard.next_review).where(Flashcard.chapter_id.in_(chapter_ids)))).scalars().all()
-    counts: Dict[date, int] = {}
-    for due in rows:
-        d = max(start, (due or utcnow()).date())
-        if (d - start).days < days:
-            counts[d] = counts.get(d, 0) + 1
-    return {d: int(n * REVIEW_MINUTES_PER_CARD) for d, n in counts.items()}
-
-
 async def _explain(summary: dict, n_chapters: int) -> str:
     base = (f"{summary['study_days']} study days of about {summary['daily_minutes']} minutes until "
-            f"{summary['deadline']:%b %d}. Each day opens with flashcard review; every 7th day is a buffer and the "
+            f"{summary['deadline']:%b %d}. Each day opens with a short review of earlier chapters; every 7th day is a buffer and the "
             f"last {summary['final_days']} day(s) are for revision and mock exams.")
     if summary["over_capacity"]:
         base += (f" About {summary['unscheduled_minutes'] // 60} h of chapters don't fit: study "
@@ -85,12 +69,10 @@ async def build_schedule(request: ScheduleBuildRequest = ScheduleBuildRequest(),
 
     units: List[Unit] = []
     order = 0
-    chapter_ids: List[str] = []
     for track in await TrackService.active(db, user.id):
         ids = {c.id for s in track.subjects for c in s.chapters}
         for s in sorted(track.subjects, key=lambda s: s.order_index):
             for c in s.chapters:
-                chapter_ids.append(c.id)
                 if c.status == "completed":
                     continue
                 left = int(round((c.estimated_hours or 1) * 60)) - int(done_minutes.get(c.id) or 0)
@@ -103,8 +85,7 @@ async def build_schedule(request: ScheduleBuildRequest = ScheduleBuildRequest(),
     for u in units:
         u.prerequisites = [p for p in u.prerequisites if p in pending_ids]
 
-    forecast = await _review_forecast(db, chapter_ids, start, (deadline - start).days)
-    plan = build_plan(units, start, deadline, profile.hours_per_day, forecast)
+    plan = build_plan(units, start, deadline, profile.hours_per_day)
     for t in plan.tasks:
         db.add(ScheduledTask(user_id=user.id, roadmap_id=t.roadmap_id, chapter_id=t.chapter_id, date=_day(t.date),
                              order=t.order, kind=t.kind, title=t.title[:300], minutes=t.minutes))
