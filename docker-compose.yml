@@ -1,0 +1,55 @@
+# Local infrastructure for StudyPilot. The API and worker run from your venv against these services.
+#
+#   docker compose up -d                          # Redis only  -> REDIS_URL=redis://localhost:6379
+#   docker compose --profile postgres up -d       # + PostgreSQL 16 with pgvector
+#   docker compose --profile s3 up -d             # + S3-compatible storage (SeaweedFS) on :8333
+#   docker compose --profile postgres --profile s3 up -d   # production-like
+#
+# Matching .env for the production-like setup:
+#   REDIS_URL=redis://localhost:6379
+#   DATABASE_URL=postgresql+asyncpg://studypilot:studypilot@localhost:5432/studypilot
+#   VECTOR_BACKEND=pgvector
+#   STORAGE_BACKEND=s3
+#   S3_BUCKET=uploads
+#   S3_ENDPOINT_URL=http://localhost:8333
+#   S3_ACCESS_KEY_ID=local
+#   S3_SECRET_ACCESS_KEY=local
+# then run the API (uvicorn app.main:app) and a worker (python -m app.worker).
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  postgres:
+    profiles: ["postgres"]
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: studypilot
+      POSTGRES_PASSWORD: studypilot
+      POSTGRES_DB: studypilot
+    ports: ["5432:5432"]
+    volumes: [pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studypilot"]
+      interval: 5s
+      retries: 10
+
+  s3:
+    # S3-compatible object storage (SeaweedFS S3 gateway). Any access key works locally; the bucket is
+    # created by the first upload (boto3) or with: aws --endpoint-url http://localhost:8333 s3 mb s3://uploads
+    profiles: ["s3"]
+    image: chrislusf/seaweedfs:3.97
+    command: server -dir=/data -s3 -s3.port=8333
+    ports: ["8333:8333"]
+    volumes: [s3_data:/data]
+
+volumes:
+  redis_data:
+  pg_data:
+  s3_data:

@@ -11,6 +11,7 @@ async def test_material_upload_and_rag_grounding(client: AsyncClient):
         json={"username": "rag_researcher", "password": "securepassword123"},
     )
     user_id = reg.json()["user_id"]
+    auth = {"Authorization": f"Bearer {reg.json()['token']}"}
 
     # 1. Upload study notes
     notes_content = (
@@ -25,15 +26,16 @@ async def test_material_upload_and_rag_grounding(client: AsyncClient):
     files = {"file": ("paxos_notes.txt", file_bytes, "text/plain")}
     data = {"user_id": user_id}
 
-    upload_resp = await client.post("/api/materials/upload", data=data, files=files)
-    assert upload_resp.status_code == 201
+    upload_resp = await client.post("/api/materials/upload", data=data, files=files, headers=auth)
+    assert upload_resp.status_code == 202
     upload_data = upload_resp.json()
+    assert upload_data["status"] == "ready"
     assert upload_data["chunk_count"] >= 1
     assert upload_data["filename"] == "paxos_notes.txt"
 
     # 2. Query uploaded notes (Grounded in notes)
     query_resp = await client.post(
-        "/api/materials/query",
+        "/api/materials/query", headers=auth,
         json={
             "user_id": user_id,
             "query": "How does Paxos achieve consensus with ballot numbers?",
@@ -49,7 +51,7 @@ async def test_material_upload_and_rag_grounding(client: AsyncClient):
 
     # 3. Query unrelated topic (Fallback to general knowledge)
     general_resp = await client.post(
-        "/api/materials/query",
+        "/api/materials/query", headers=auth,
         json={
             "user_id": user_id,
             "query": "What is photosynthesis in plant biology and chlorophyll?",
