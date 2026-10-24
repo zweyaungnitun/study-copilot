@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { api, type ResourceLink, type StudyGuide } from '../api'
 import { useLoad } from '../hooks'
 import { Empty, ErrorBox, Icon, type IconName, Markdown, PageHeader, ProgressBar, Segmented, Skeleton, Spinner, useToast } from '../ui'
@@ -67,7 +67,6 @@ const tiers: ['simple_content' | 'detailed_content' | 'exam_content' | 'cheat_sh
 
 export default function ChapterPage() {
   const { id } = useParams()
-  const nav = useNavigate()
   const toast = useToast()
   const info = useLoad(() => api.chapter(id!), [id])
   const locked = info.data?.status === 'locked'
@@ -75,14 +74,9 @@ export default function ChapterPage() {
   const notes = useLoad(async () => (info.data && !locked ? api.notes(id!) : null), [id, info.data?.status === 'locked', !!info.data])
   const guide = useLoad(async () => (info.data && !locked ? api.guide(id!) : null), [id, info.data?.status === 'locked', !!info.data])
   const [tier, setTier] = useState<(typeof tiers)[number][0]>('simple_content')
-  const [busy, setBusy] = useState<'cards' | 'done' | 'reopen' | ''>('')
+  const [busy, setBusy] = useState<'done' | 'reopen' | ''>('')
 
   const back = <Link to={info.data ? `/roadmap?track=${info.data.roadmap_id}` : '/roadmap'} className="back"><Icon name="back" size={15} />{info.data?.roadmap_name || 'Roadmap'}</Link>
-  const gen = async () => {
-    setBusy('cards')
-    try { const c = await api.genCards(id!); toast('ok', `Created ${c.length} flashcards`); nav('/flashcards') }
-    catch (e) { toast('err', (e as Error).message) } finally { setBusy('') }
-  }
   const complete = async () => {
     setBusy('done')
     try {
@@ -117,12 +111,11 @@ export default function ChapterPage() {
         sub={<>{c.subject_name} · {c.estimated_hours}h · <span className={`badge ${finished ? 'green' : 'accent'}`}>{finished ? 'Completed' : 'In progress'}</span></>}
         actions={<>
           <Link to={`/tutor?chapter=${id}`}><button className="ghost"><Icon name="chat" size={16} />Ask the tutor</button></Link>
-          <button className="ghost" onClick={gen} disabled={!!busy}>{busy === 'cards' ? <Spinner /> : <Icon name="cards" size={16} />}Make flashcards</button>
           {finished ? <button className="ghost" onClick={reopen} disabled={!!busy}>{busy === 'reopen' ? <Spinner /> : <Icon name="refresh" size={16} />}Reopen</button> : <button onClick={complete} disabled={!!busy}>{busy === 'done' ? <Spinner /> : <Icon name="check" size={16} />}Mark complete</button>}</>} />
       {!!c.sources?.length && <div className="card chapter-sources">
         <div className="card-head"><h2><Icon name="book" size={16} /> Read in your materials</h2></div>
         <ul>{c.sources.map(src => <li key={src.section_id}><b>{src.title}</b> <span className="muted">· {src.filename}, p. {src.page_start}{src.page_end > src.page_start && `–${src.page_end}`}</span></li>)}</ul>
-        <p className="muted" style={{ fontSize: 13, margin: 0 }}>Notes, flashcards, exams and the tutor use these pages first.</p>
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>Notes, exams and the tutor use these pages first.</p>
       </div>}
       {guide.loading ? <div className="card"><Skeleton lines={4} /></div>
         : guide.data ? <LearningPath guide={guide.data} />
@@ -134,7 +127,7 @@ export default function ChapterPage() {
       {guide.data && <Resources chapterId={id!} links={guide.data.resources} onChange={resources => guide.setData({ ...guide.data!, resources })} />}
       <div className="card"><div className="card-head"><h2>Mastery</h2><b className="num">{Math.round(c.mastery_score)}%</b></div>
         <ProgressBar value={c.mastery_score} tone="green" />
-        <p className="muted" style={{ marginTop: 8 }}>Review this chapter's flashcards to raise mastery. Reaching 80% completes it automatically.</p></div>
+        <p className="muted" style={{ marginTop: 8 }}>Mark the chapter complete once you've worked through the notes and practice.</p></div>
       {finished && c.next_chapter && <div className="card row" style={{ justifyContent: 'space-between' }}>
         <div><div className="muted">Up next</div><b>{c.next_chapter.title}</b></div>
         <Link to={`/chapters/${c.next_chapter.id}`}><button>Continue <Icon name="arrow" size={16} /></button></Link></div>}

@@ -86,7 +86,7 @@ export default function RoadmapPage() {
         </div>
         {next ? <div className="progress-next"><span className="muted">{next.status === 'in_progress' ? 'Continue where you left off' : 'Up next'}</span><b>{next.title}</b>
             <Link to={`/chapters/${next.id}`}><button>{next.status === 'in_progress' ? 'Continue' : 'Start'} <Icon name="arrow" size={16} /></button></Link></div>
-          : done === chapters.length && <p className="muted">🎉 Every chapter is complete. Review flashcards to keep it fresh.</p>}
+          : done === chapters.length && <p className="muted">🎉 Every chapter is complete. Take a mock exam to check what stuck.</p>}
       </div>
       <RoadmapAdvisor key={track.id} mode="discuss" userId={uid} track={track} onApplied={t => replaceTrack(track.id, t)} />
       {subjects.map((s, i) => {

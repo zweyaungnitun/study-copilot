@@ -63,10 +63,10 @@ export default function Dashboard() {
           <div className="hero-main">
             <span className="hero-eyebrow">{today}</span>
             <h1>{greet}, <span className="grad-text">{session!.username}</span></h1>
-            <p className="hero-sub">{focus ? <>Pick up where you left off in <b>{focus.t.specialization}</b>.</> : tracks.length ? 'You\'ve finished every chapter. Review your flashcards to keep it fresh.' : 'Create your first track to get a personalised plan.'}</p>
+            <p className="hero-sub">{focus ? <>Pick up where you left off in <b>{focus.t.specialization}</b>.</> : tracks.length ? 'You\'ve finished every chapter. Take a mock exam to check what stuck.' : 'Create your first track to get a personalised plan.'}</p>
             <div className="row hero-actions">
               {focus ? <Link to={`/chapters/${focus.next!.id}`}><button className="lg">{focus.next!.status === 'in_progress' ? 'Continue' : 'Start'}: {focus.next!.title} <Icon name="arrow" size={16} /></button></Link>
-                : <Link to={tracks.length ? '/flashcards' : '/onboarding'}><button className="lg">{tracks.length ? 'Review flashcards' : 'Build my roadmap'} <Icon name="arrow" size={16} /></button></Link>}
+                : <Link to={tracks.length ? '/exam' : '/onboarding'}><button className="lg">{tracks.length ? 'Take a mock exam' : 'Build my roadmap'} <Icon name="arrow" size={16} /></button></Link>}
               {focus && <Link to={`/tutor?chapter=${focus.next!.id}`}><button className="ghost lg"><Icon name="chat" size={16} />Ask tutor</button></Link>}
             </div>
           </div>

@@ -9,7 +9,6 @@ import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import RoadmapPage from './pages/Roadmap'
 import ChapterPage from './pages/Chapter'
-import Flashcards from './pages/Flashcards'
 import Tutor from './pages/Tutor'
 import BrainMapPage from './pages/BrainMap'
 import Library from './pages/Library'
@@ -23,7 +22,7 @@ import AdminApp from './admin/AdminApp'
 
 type NavItem = [to: string, label: string, icon: IconName]
 const learn: NavItem[] = [
-  ['/', 'Home', 'home'], ['/schedule', 'Schedule', 'calendar'], ['/roadmap', 'Roadmap', 'map'], ['/flashcards', 'Flashcards', 'cards'], ['/tutor', 'AI Tutor', 'chat'],
+  ['/', 'Home', 'home'], ['/schedule', 'Schedule', 'calendar'], ['/roadmap', 'Roadmap', 'map'], ['/tutor', 'AI Tutor', 'chat'],
 ]
 const insights: NavItem[] = [
   ['/brain-map', 'Brain Map', 'brain'], ['/library', 'Library', 'book'], ['/mistakes', 'Mistakes', 'alert'], ['/exam', 'Mock exam', 'exam'],
@@ -178,7 +177,6 @@ export default function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/roadmap" element={<RoadmapPage />} />
             <Route path="/chapters/:id" element={<ChapterPage />} />
-            <Route path="/flashcards" element={<Flashcards />} />
             <Route path="/tutor" element={<Tutor />} />
             <Route path="/brain-map" element={<BrainMapPage />} />
             <Route path="/library" element={<Library />} />

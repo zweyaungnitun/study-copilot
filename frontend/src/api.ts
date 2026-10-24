@@ -61,8 +61,6 @@ export interface DiscussReply { reply: string; proposal: Proposal | null; sessio
 export interface ChatSummary { id: string; kind: 'tutor' | 'roadmap' | 'design'; chapter_id?: string; title: string; updated_at: string; message_count: number }
 export interface ChatMsg { id: string; role: 'user' | 'ai'; content: string; meta: Record<string, unknown>; created_at: string }
 export interface ChatDetail extends ChatSummary { messages: ChatMsg[] }
-export interface Flashcard { id: string; chapter_id: string; type: string; front: string; back: string; source: string; source_citation?: string }
-export interface ReviewResult { interval: number; ease: number; reps: number; next_review: string }
 export interface ResourceLink { id: string; type: string; label: string; url: string; source: 'ai' | 'search' | 'user' }
 export interface StudyGuide { chapter_id: string; overview: string; objectives: string[]; lesson_steps: { title: string; minutes: number; activity: string }[]; practice: string[]; resources: ResourceLink[] }
 export interface Note { chapter_id: string; simple_content: string; detailed_content: string; exam_content: string; cheat_sheet?: string }
@@ -202,9 +200,6 @@ export const api = {
   guide: (chapter_id: string) => get<StudyGuide>(`/chapters/${chapter_id}/guide`),
   addResource: (chapter_id: string, b: { label: string; url: string; type?: string }) => post<ResourceLink>(`/chapters/${chapter_id}/resources`, b),
   deleteResource: (chapter_id: string, id: string) => request<void>(`/chapters/${chapter_id}/resources/${id}`, { method: 'DELETE' }),
-  genCards: (chapter_id: string, count = 10) => post<Flashcard[]>('/flashcards/generate', { chapter_id, count }),
-  dueCards: (user_id: string, limit = 20) => get<Flashcard[]>('/flashcards/due' + qs({ user_id, limit })),
-  review: (id: string, quality: number) => post<ReviewResult>(`/flashcards/${id}/review`, { quality }),
   startSession: (user_id: string, energy_level: string) => post<SessionStart>('/session/start', { user_id, energy_level }),
   endSession: (b: Record<string, unknown>) => post<SessionEnd>('/session/end', b),
   chats: (user_id: string, kind: 'tutor' | 'roadmap' | 'design', chapter_id?: string) => get<ChatSummary[]>('/chats' + qs({ user_id, kind, chapter_id })),

@@ -4,7 +4,7 @@ import { Brand, ErrorBox, Icon, Spinner, type IconName } from '../ui'
 
 const perks: [IconName, string][] = [
   ['map', 'A personalised roadmap built around your goal and deadline'],
-  ['cards', 'Spaced-repetition flashcards that adapt to what you forget'],
+  ['calendar', 'A day-by-day schedule built from your own textbooks and notes'],
   ['chat', 'An AI tutor that guides you with hints, not just answers'],
 ]
 

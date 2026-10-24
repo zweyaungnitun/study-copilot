@@ -81,7 +81,7 @@ export default function SchedulePage() {
       </div>}
       {!s && !data?.tasks.length ? (
         <Empty icon="calendar" title="No schedule yet" action={<button onClick={build} disabled={building}>{building && <Spinner />}Build my schedule</button>}>
-          Turns your tracks into daily sessions with flashcard review, buffer days and mock exams before your deadline.</Empty>
+          Turns your tracks into daily sessions with review blocks, buffer days and mock exams before your deadline.</Empty>
       ) : (
         <div className="week">{days.map(d => {
           const key = iso(d)
