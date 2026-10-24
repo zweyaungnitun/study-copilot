@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 const PATHS = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
@@ -27,6 +27,25 @@ const PATHS = {
   back: 'M19 12H5M11 6l-6 6 6 6',
   target: 'M12 12m-1 0a1 1 0 102 0 1 1 0 10-2 0M12 12m-5 0a5 5 0 1010 0 5 5 0 10-10 0M12 12m-9 0a9 9 0 1018 0 9 9 0 10-18 0',
   refresh: 'M20 11a8 8 0 00-14.9-3M4 4v4h4M4 13a8 8 0 0014.9 3M20 20v-4h-4',
+  search: 'M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4.2-4.2',
+  plus: 'M12 5v14M5 12h14',
+  sidebar: 'M4 5h16v14H4zM9 5v14',
+  chevron: 'M9 6l6 6-6 6',
+  stop: 'M7 7h10v10H7z',
+  tool: 'M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.5 2.5-2.8-.7-.7-2.8z',
+  copy: 'M9 9h11v11H9zM5 15V4h11',
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0012 3z',
+  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  users: 'M16 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 20v-1a4 4 0 00-3-3.9M16 4.1a3.5 3.5 0 010 6.8',
+  gauge: 'M12 14l4-4M3.5 17a9 9 0 1117 0',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z',
+  coins: 'M9 9a6 3 0 1012 0 6 3 0 10-12 0M9 9v4c0 1.7 2.7 3 6 3s6-1.3 6-3V9M3 13a6 3 0 006 3M3 13v4c0 1.7 2.7 3 6 3 1.2 0 2.3-.2 3.2-.5M3 13c0-1 .9-1.9 2.4-2.4',
+  exam: 'M9 4h6v3H9zM7 5H5v16h14V5h-2M8 12l2 2 4-4M8 17h8',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+  wand: 'M15 4V2M15 10V8M11 6h-2M21 6h-2M17.8 3.2l-1.4 1.4M17.8 8.8l-1.4-1.4M3 21l11-11',
 } as const
 export type IconName = keyof typeof PATHS
 
@@ -82,6 +101,43 @@ export const Segmented = <T extends string | number>({ value, onChange, options,
   </div>
 )
 
+/** Number that counts up from 0 on mount (instant when reduced motion is requested). */
+export function CountUp({ value, duration = 800 }: { value: number; duration?: number }) {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { setN(value); return }
+    let raf = 0
+    const start = performance.now()
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration)
+      setN(Math.round(value * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <>{n}</>
+}
+
+/** Circular progress (0-100). Animates in on mount; children render in the centre. */
+export function ProgressRing({ value, size = 56, stroke = 6, tone = 'accent', children, label }: {
+  value: number; size?: number; stroke?: number; tone?: 'accent' | 'green' | 'spark'; children?: ReactNode; label?: string
+}) {
+  const v = Math.max(0, Math.min(100, value))
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r
+  return (
+    <span className={`ring ${tone}`} style={{ width: size, height: size }} role="img" aria-label={label ?? `${Math.round(v)} percent`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle className="ring-bg" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} fill="none" />
+        <circle className="ring-fg" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} fill="none" strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - v / 100)} style={{ ['--c' as string]: c }}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      </svg>
+      {children && <span className="ring-label">{children}</span>}
+    </span>
+  )
+}
+
 export const ProgressBar = ({ value, tone = 'accent' }: { value: number; tone?: 'accent' | 'green' }) => (
   <div className="bar" role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}>
     <i className={tone} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
@@ -90,8 +146,11 @@ export const ProgressBar = ({ value, tone = 'accent' }: { value: number; tone?: 
 
 /** Minimal markdown: headings, bullets, numbered lists, **bold**, `code`, paragraphs. */
 export function Markdown({ text }: { text: string }) {
-  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((p, i) =>
-    p.startsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong> : p.startsWith('`') ? <code key={i}>{p.slice(1, -1)}</code> : p)
+  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*?\*|`[^`]+`|\[\d{1,2}\])/g).map((p, i) =>
+    p.startsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong>
+      : p.length > 2 && p.startsWith('*') && p.endsWith('*') ? <em key={i}>{p.slice(1, -1)}</em>
+      : p.startsWith('`') ? <code key={i}>{p.slice(1, -1)}</code>
+        : /^\[\d{1,2}\]$/.test(p) ? <sup key={i} className="cite" data-n={p.slice(1, -1)}>{p.slice(1, -1)}</sup> : p)
   const out: ReactNode[] = []
   let list: { ordered: boolean; items: ReactNode[] } | null = null
   const flush = () => {

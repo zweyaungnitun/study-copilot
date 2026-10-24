@@ -1,93 +1,353 @@
+"""Gemini client: retries with backoff, multi-turn tool calling, SSE streaming and embeddings.
+
+Every live call degrades gracefully: when no key is configured or the API keeps failing, callers
+get ``None`` (low-level API) or a deterministic offline fallback (``generate_text``/``generate_json``).
+"""
+import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+import random
+import time
+from dataclasses import dataclass, field
+from typing import Any, AsyncIterator, Dict, List, Optional
+
 import httpx
 
 from app.core.config import settings
+from app.services.usage_service import UsageService
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("studypilot.llm")
+
+API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
+RETRY_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+@dataclass
+class LLMResult:
+    """One model response. ``parts`` are kept verbatim so tool-call turns can be replayed exactly."""
+    parts: List[Dict[str, Any]] = field(default_factory=list)
+    usage: Dict[str, int] = field(default_factory=dict)
+    finish_reason: Optional[str] = None
+
+    @property
+    def text(self) -> str:
+        return "".join(p.get("text", "") for p in self.parts if not p.get("thought"))
+
+    @property
+    def function_calls(self) -> List[Dict[str, Any]]:
+        return [p["functionCall"] for p in self.parts if "functionCall" in p]
 
 
 class LLMClient:
-    """Centralized LLM client supporting Google AI Studio (Gemini) with local offline fallback."""
+    """Centralized LLM client for Google Gemini with an offline fallback."""
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.GOOGLE_API_KEY
         self.default_model = settings.GEMINI_MODEL
         self.fast_model = settings.GEMINI_FAST_MODEL
+        self.embed_model = settings.GEMINI_EMBED_MODEL
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._retired: set = set()
+        self._no_minimal: set = {"gemini-3.8-flash"}  # models that reject thinkingLevel MINIMAL (learned at runtime too)
 
-    async def generate_text(
+    @property
+    def is_live(self) -> bool:
+        return bool(self.api_key) and self.api_key not in ["your_google_api_key_here", "mock-key-for-local-dev"]
+
+    # ------------------------------------------------------------------ transport
+    def _http(self) -> httpx.AsyncClient:
+        """Shared connection pool, recreated if the event loop changed (tests, reloads)."""
+        loop = asyncio.get_running_loop()
+        if self._client is None or self._client.is_closed or self._client_loop is not loop:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.LLM_TIMEOUT_SECONDS, connect=10.0),
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+                headers={"x-goog-api-key": self.api_key, "content-type": "application/json"},
+            )
+            self._client_loop = loop
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    @staticmethod
+    def _backoff(attempt: int, retry_after: Optional[str]) -> float:
+        if retry_after:
+            try:
+                return min(float(retry_after), 10.0)
+            except ValueError:
+                pass
+        return min(0.6 * (2 ** attempt), 8.0) + random.uniform(0, 0.4)
+
+    async def _post(self, path: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """POST with retries on rate limits, 5xx and network errors. Returns None on failure."""
+        return (await self._post_status(path, payload))[0]
+
+    async def _post_status(self, path: str, payload: Dict[str, Any]):
+        """Like ``_post`` but also returns the final HTTP status (0 for network failure)."""
+        if not self.is_live:
+            return None, 0
+        for attempt in range(settings.LLM_MAX_RETRIES + 1):
+            try:
+                resp = await self._http().post(f"{API_ROOT}/{path}", json=payload)
+                if resp.status_code in RETRY_STATUS and attempt < settings.LLM_MAX_RETRIES:
+                    delay = self._backoff(attempt, resp.headers.get("retry-after"))
+                    logger.warning("Gemini %s -> %s, retrying in %.1fs", path, resp.status_code, delay)
+                    await asyncio.sleep(delay)
+                    continue
+                if resp.status_code >= 400:
+                    self._last_error = resp.text[:500]
+                    if not (resp.status_code == 400 and "thinking level" in resp.text.lower()):
+                        logger.error("Gemini %s failed %s: %s", path, resp.status_code, resp.text[:300])
+                    return None, resp.status_code
+                return resp.json(), resp.status_code
+            except (httpx.TimeoutException, httpx.TransportError) as e:
+                if attempt >= settings.LLM_MAX_RETRIES:
+                    logger.error("Gemini %s network failure: %s", path, e)
+                    return None, 0
+                await asyncio.sleep(self._backoff(attempt, None))
+        return None, 0
+
+    # ------------------------------------------------------------------ payloads
+    def _thinking(self, model: str, budget: Optional[int]) -> Optional[Dict[str, Any]]:
+        """Gemini 2.x takes a token budget; Gemini 3.x+ takes a thinking level instead."""
+        if budget is None or budget < 0:
+            return None  # model default / dynamic
+        if model.startswith("gemini-2"):
+            return {"thinkingBudget": budget}
+        if model.startswith("gemini-"):
+            if budget == 0 and model not in self._no_minimal:
+                return {"thinkingLevel": "minimal"}
+            return {"thinkingLevel": "low" if budget <= 2048 else "high"}
+        return None
+
+    def _learn_thinking(self, model: str, status: int, body: str) -> bool:
+        """Remember a model that rejected MINIMAL thinking so calls retry (and later start) at LOW."""
+        if status == 400 and "thinking level" in body.lower() and model not in self._no_minimal:
+            self._no_minimal.add(model)
+            logger.warning("Model %s rejects minimal thinking; using low", model)
+            return True
+        return False
+
+    def _resolve(self, model: Optional[str]) -> str:
+        name = model or self.default_model
+        return self.default_model if name in self._retired else name
+
+    def _retire(self, model: str, status: int) -> bool:
+        """Remember a model the API no longer serves (404) and route its calls to the default model."""
+        if status == 404 and model != self.default_model and model not in self._retired:
+            self._retired.add(model)
+            logger.error("Model %s is unavailable (404); using %s instead. Update GEMINI_*_MODEL in .env.",
+                         model, self.default_model)
+            return True
+        return False
+
+    def _payload(
         self,
-        prompt: str,
+        contents: List[Dict[str, Any]],
+        system_prompt: Optional[str],
+        tools: Optional[List[Dict[str, Any]]],
+        temperature: float,
+        max_tokens: int,
+        json_mode: bool,
+        thinking_budget: Optional[int],
+        tool_mode: str,
+        model: str = "",
+    ) -> Dict[str, Any]:
+        cfg: Dict[str, Any] = {"temperature": temperature, "maxOutputTokens": max_tokens}
+        thinking = self._thinking(model, thinking_budget)
+        if thinking:
+            # Thinking tokens count against maxOutputTokens, so callers size both together.
+            cfg["thinkingConfig"] = thinking
+        if json_mode:
+            cfg["responseMimeType"] = "application/json"
+        payload: Dict[str, Any] = {"contents": contents, "generationConfig": cfg}
+        if system_prompt:
+            payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+        if tools:
+            payload["tools"] = [{"functionDeclarations": tools}]
+            payload["toolConfig"] = {"functionCallingConfig": {"mode": tool_mode}}
+        return payload
+
+    @staticmethod
+    def _usage(data: Dict[str, Any]) -> Dict[str, int]:
+        u = data.get("usageMetadata") or {}
+        return {
+            "input": u.get("promptTokenCount", 0),
+            "output": u.get("candidatesTokenCount", 0),
+            "thinking": u.get("thoughtsTokenCount", 0),
+        }
+
+    # ------------------------------------------------------------------ core API
+    async def generate(
+        self,
+        contents: List[Dict[str, Any]],
         system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 1500,
-    ) -> str:
-        """Call Gemini API or provide intelligent fallback if API key is not configured."""
-        if self.api_key and self.api_key not in ["your_google_api_key_here", "mock-key-for-local-dev"]:
-            try:
-                headers = {
-                    "x-goog-api-key": self.api_key,
-                    "content-type": "application/json",
-                }
-                payload: Dict[str, Any] = {
-                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "temperature": temperature,
-                        "maxOutputTokens": max_tokens,
-                    },
-                }
-                if system_prompt:
-                    payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-
-                model_name = model or self.default_model
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
-                        headers=headers,
-                        json=payload,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return "".join(
-                        part.get("text", "")
-                        for part in data["candidates"][0]["content"]["parts"]
-                    )
-            except Exception as e:
-                logger.warning(f"Live LLM call failed, falling back to heuristic generator: {e}")
-
-        return self._generate_fallback_text(prompt)
-
-    async def generate_json(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Generate structured JSON response."""
-        enforced_system = (system_prompt or "") + "\nYou MUST return only valid, parsable JSON without markdown code fences."
-        response_text = await self.generate_text(
-            prompt=prompt,
-            system_prompt=enforced_system,
-            model=model,
-            temperature=0.2,
+        max_tokens: int = 2048,
+        json_mode: bool = False,
+        thinking_budget: Optional[int] = 0,
+        tool_mode: str = "AUTO",
+    ) -> Optional[LLMResult]:
+        """One non-streaming call over a full multi-turn ``contents`` list."""
+        model_name = self._resolve(model)
+        if self.is_live:
+            await UsageService.ensure_quota()
+        started = time.perf_counter()
+        data, status = await self._post_status(
+            f"models/{model_name}:generateContent",
+            self._payload(contents, system_prompt, tools, temperature, max_tokens, json_mode, thinking_budget, tool_mode, model_name),
         )
+        if data is None and self._learn_thinking(model_name, status, getattr(self, "_last_error", "")):
+            return await self.generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
+                                       json_mode, thinking_budget, tool_mode)
+        if data is None and self._retire(model_name, status):
+            return await self.generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
+                                       json_mode, thinking_budget, tool_mode)
+        if not data or not data.get("candidates"):
+            if data:
+                logger.warning("Gemini returned no candidates: %s", str(data.get("promptFeedback"))[:200])
+            return None
+        cand = data["candidates"][0]
+        result = LLMResult(cand.get("content", {}).get("parts", []) or [], self._usage(data), cand.get("finishReason"))
+        logger.info("llm model=%s ms=%d usage=%s finish=%s", model_name,
+                    (time.perf_counter() - started) * 1000, result.usage, result.finish_reason)
+        await UsageService.record(model_name, result.usage)
+        return result
 
-        cleaned = response_text.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        elif cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+    async def stream(
+        self,
+        contents: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        thinking_budget: Optional[int] = 0,
+        tool_mode: str = "AUTO",
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Stream a response as SSE chunks.
 
+        Yields ``{"text": delta}`` for visible text, ``{"part": part}`` for every raw part (needed to
+        replay tool-call turns), and finally ``{"usage": {...}, "finish_reason": str}``.
+        Raises ``RuntimeError`` if the stream cannot be opened, so callers can fall back.
+        """
+        if not self.is_live:
+            raise RuntimeError("LLM offline")
+        await UsageService.ensure_quota()
+        model_name = self._resolve(model)
+        payload = self._payload(contents, system_prompt, tools, temperature, max_tokens, False, thinking_budget, tool_mode, model_name)
+        url = f"{API_ROOT}/models/{model_name}:streamGenerateContent?alt=sse"
+        usage: Dict[str, int] = {}
+        finish: Optional[str] = None
+        for attempt in range(settings.LLM_MAX_RETRIES + 1):
+            try:
+                async with self._http().stream("POST", url, json=payload) as resp:
+                    if resp.status_code in RETRY_STATUS and attempt < settings.LLM_MAX_RETRIES:
+                        await resp.aread()
+                        await asyncio.sleep(self._backoff(attempt, resp.headers.get("retry-after")))
+                        continue
+                    if resp.status_code >= 400:
+                        body = (await resp.aread()).decode(errors="ignore")
+                        if self._learn_thinking(model_name, resp.status_code, body):
+                            payload = self._payload(contents, system_prompt, tools, temperature, max_tokens, False,
+                                                    thinking_budget, tool_mode, model_name)
+                            continue
+                        raise RuntimeError(f"Gemini stream failed {resp.status_code}: {body[:300]}")
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            data = json.loads(line[5:].strip())
+                        except json.JSONDecodeError:
+                            continue
+                        if data.get("usageMetadata"):
+                            usage = self._usage(data)
+                        for cand in data.get("candidates", [])[:1]:
+                            finish = cand.get("finishReason") or finish
+                            for part in (cand.get("content") or {}).get("parts", []) or []:
+                                yield {"part": part}
+                                if part.get("text") and not part.get("thought"):
+                                    yield {"text": part["text"]}
+                    await UsageService.record(model_name, usage)
+                    yield {"usage": usage, "finish_reason": finish}
+                    return
+            except (httpx.TimeoutException, httpx.TransportError) as e:
+                if attempt >= settings.LLM_MAX_RETRIES:
+                    raise RuntimeError(f"Gemini stream network failure: {e}") from e
+                await asyncio.sleep(self._backoff(attempt, None))
+        raise RuntimeError("Gemini stream retries exhausted")
+
+    async def embed(self, texts: List[str], task_type: str = "RETRIEVAL_DOCUMENT") -> Optional[List[List[float]]]:
+        """Batch-embed texts (100 per request). Returns None if embeddings are unavailable."""
+        if not self.is_live or not texts:
+            return None
+        await UsageService.ensure_quota()
+        out: List[List[float]] = []
+        model = f"models/{self.embed_model}"
+        for i in range(0, len(texts), 100):
+            batch = texts[i:i + 100]
+            data = await self._post(f"{model}:batchEmbedContents", {"requests": [
+                {"model": model, "content": {"parts": [{"text": t[:8000]}]}, "taskType": task_type,
+                 "outputDimensionality": settings.EMBED_DIM}
+                for t in batch
+            ]})
+            if not data or len(data.get("embeddings", [])) != len(batch):
+                return None
+            out.extend(e.get("values", []) for e in data["embeddings"])
+        # The embeddings API reports no usage; estimate ~4 characters per token.
+        await UsageService.record(self.embed_model, {"input": sum(min(len(t), 8000) for t in texts) // 4})
+        return out
+
+    # ------------------------------------------------------------------ convenience (backwards compatible)
+    async def _call_gemini(self, prompt: str, system_prompt: Optional[str], model: Optional[str],
+                           temperature: float, max_tokens: int, json_mode: bool) -> Optional[str]:
+        res = await self.generate([{"role": "user", "parts": [{"text": prompt}]}], system_prompt, None, model,
+                                  temperature, max_tokens, json_mode, thinking_budget=0)
+        return res.text if res and res.text.strip() else None
+
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, model: Optional[str] = None,
+                            temperature: float = 0.7, max_tokens: int = 2048) -> str:
+        """Single-prompt text generation with an offline fallback."""
+        text = await self._call_gemini(prompt, system_prompt, model, temperature, max_tokens, json_mode=False)
+        if text is None and self.is_live:
+            logger.warning("generate_text used offline fallback content")
+        return text if text is not None else self._generate_fallback_text(prompt)
+
+    @staticmethod
+    def _parse_json(text: str) -> Any:
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.rstrip().endswith("```"):
+                cleaned = cleaned.rstrip()[:-3]
+        return json.loads(cleaned.strip())
+
+    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None, model: Optional[str] = None,
+                            max_tokens: int = 8192, fallback: Any = None) -> Any:
+        """Structured JSON generation. Retries once on unparsable output, then uses ``fallback``."""
+        enforced_system = (system_prompt or "") + "\nYou MUST return only valid, parsable JSON without markdown code fences."
+        for _ in range(2):
+            text = await self._call_gemini(prompt, enforced_system, model, temperature=0.3,
+                                           max_tokens=max_tokens, json_mode=True)
+            if text is None:
+                break
+            try:
+                return self._parse_json(text)
+            except json.JSONDecodeError:
+                logger.error("Failed to parse LLM JSON response: %s", text[:300])
+        if self.is_live:
+            logger.warning("generate_json used offline fallback content (model call failed or returned bad JSON)")
+        if fallback is not None:
+            return fallback
         try:
-            return json.loads(cleaned)
+            return self._parse_json(self._generate_fallback_text(prompt))
         except json.JSONDecodeError:
-            logger.error(f"Failed to parse LLM JSON response: {response_text}")
-            return {"error": "Invalid JSON response", "raw": response_text}
+            return {"error": "Invalid JSON response"}
 
     def _generate_fallback_text(self, prompt: str) -> str:
         """Realistic fallback text for local testing and offline modes."""

@@ -1,7 +1,7 @@
 from app.services.brain_map_service import BrainMapService
 from app.services.exam_service import ExamService
 from app.services.flashcard_service import FlashcardService
-from app.services.ingestion_service import IngestionService
+from app.services.ingestion_service import IngestionPipeline
 from app.services.intake_service import IntakeService
 from app.services.llm_client import llm_client
 from app.services.mistake_service import MistakeService
@@ -17,7 +17,7 @@ __all__ = [
     "BrainMapService",
     "ExamService",
     "FlashcardService",
-    "IngestionService",
+    "IngestionPipeline",
     "IntakeService",
     "llm_client",
     "MistakeService",

@@ -13,3 +13,22 @@ pytest>=8.1.1
 pytest-asyncio>=0.23.6
 networkx>=3.2.1
 pypdf>=5.0.0
+langchain>=1.4.6
+langchain-core>=1.6.12
+langgraph>=1.2.16
+langchain-google-genai>=4.4.2
+deepagents>=0.7.28
+# Ingestion pipeline
+arq>=0.28.0
+redis>=5.0.0
+chromadb>=1.5.0
+pdfplumber>=0.11.0
+pypdfium2>=4.30.0
+filetype>=1.2.0
+pytesseract>=0.3.13
+pillow>=10.0.0
+boto3>=1.35.0
+asyncpg>=0.30.0
+# Tests
+reportlab>=4.2.0
+moto[s3]>=5.0.0
