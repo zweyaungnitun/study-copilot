@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from app.services.llm_client import llm_client
 
 
@@ -14,6 +14,9 @@ class TutorService:
         notes_context: Optional[str] = None,
         hint_level: int = 1,
         mode: str = "socratic",
+        history: Optional[List[Dict[str, str]]] = None,
+        goal: Optional[str] = None,
+        level: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate response following active learning pedagogical state machine."""
         source = "📚 From your notes" if notes_context else "🌐 General knowledge"
@@ -29,24 +32,36 @@ class TutorService:
         system_prompt = f"""
 You are StudyPilot's Socratic AI Tutor.
 Mode: {mode.upper()}
+Learner goal: {goal or 'not specified'} (level: {level or 'unknown'}). Keep explanations at that level.
 Guidance Rules:
-1. Never give away the full final solution immediately unless explicitly ordered.
+1. {"Never give away the full final solution immediately unless explicitly ordered." if mode == "socratic" else "Answer directly and clearly, then check understanding with one question."}
 2. Foster active recall and critical reasoning.
 3. {level_instructions}
 4. Detect any false assumptions or conceptual errors in the learner's thinking.
 """
 
+        convo = "\n".join(
+            f"{'Learner' if t['role'] == 'user' else 'Tutor'}: {t['content'][:600]}"
+            for t in (history or [])[-8:]
+        )
         prompt = f"""
+Conversation so far:
+{convo or '(first message)'}
+
 Learner message: "{user_message}"
 Context topic: {chapter_title or 'General Curriculum'}
-Reference Context: {notes_context[:1000] if notes_context else 'None'}
+Reference Context: {notes_context[:3000] if notes_context else 'None'}
 
 Please respond in JSON with keys:
 - "reply": The tutor's conversational response
 - "detected_misconception": string describing any error, or null
 - "follow_up_question": A targeted probing question for the student
+- "suggestions": 2 to 3 short (under 8 words) things the learner might tap next, e.g. "Give me a hint", "Quiz me on this"
+Use the conversation so far; do not repeat earlier questions.
 """
-        result = await llm_client.generate_json(prompt, system_prompt=system_prompt)
+        result = await llm_client.generate_json(prompt, system_prompt=system_prompt, max_tokens=2048, fallback={})
+        if not isinstance(result, dict):
+            result = {}
 
         reply = result.get("reply")
         misconception = result.get("detected_misconception")
@@ -69,4 +84,6 @@ Please respond in JSON with keys:
             "hint_level": hint_level,
             "detected_misconception": misconception,
             "follow_up_question": follow_up,
+            "suggestions": [str(x) for x in (result.get("suggestions") or []) if isinstance(x, str)][:3]
+            or ["Give me a hint", "Explain it simply", "Quiz me on this"],
         }
