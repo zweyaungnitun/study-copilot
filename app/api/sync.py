@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.models.entities import CardReview, Chapter, Flashcard, Note, Roadmap, Subject
+from app.services.track_service import TrackService
 from app.services.sm2_service import SM2Engine
 
 router = APIRouter(prefix="/sync", tags=["Offline Sync & Bundler"])
@@ -15,18 +16,8 @@ router = APIRouter(prefix="/sync", tags=["Offline Sync & Bundler"])
 @router.post("/offline-bundle")
 async def generate_offline_bundle(user_id: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Generate lightweight JSON pack of notes and due flashcards for offline study."""
-    stmt = (
-        select(Roadmap)
-        .where(Roadmap.user_id == user_id, Roadmap.is_active == True)
-        .options(selectinload(Roadmap.subjects).selectinload(Subject.chapters))
-    )
-    res = await db.execute(stmt)
-    roadmap = res.scalar_one_or_none()
-
-    if not roadmap:
-        raise HTTPException(status_code=404, detail="No active roadmap found")
-
-    chapter_ids = [c.id for s in roadmap.subjects for c in s.chapters]
+    tracks = await TrackService.select(db, user_id)
+    chapter_ids = [c.id for roadmap in tracks for s in roadmap.subjects for c in s.chapters]
 
     # Fetch notes
     note_stmt = select(Note).where(Note.chapter_id.in_(chapter_ids))

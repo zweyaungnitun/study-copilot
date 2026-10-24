@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { api, type SessionEnd, type SessionStart } from '../api'
 import { useAuth } from '../auth'
 import { useLoad } from '../hooks'
-import { Empty, ErrorBox, Icon, Markdown, PageHeader, Segmented, Skeleton, Spinner, useToast, type IconName } from '../ui'
+import TrackCard from '../TrackCard'
+import { Empty, ErrorBox, Icon, Markdown, PageHeader, CountUp, ProgressRing, Segmented, Skeleton, Spinner, useToast, type IconName } from '../ui'
 
 const typeTone: Record<string, string> = { review: 'yellow', practice: 'green', learn: '' }
 
@@ -12,6 +13,11 @@ export default function Dashboard() {
   const toast = useToast()
   const uid = session!.user_id
   const coach = useLoad(() => api.coach(uid), [uid])
+  const road = useLoad(() => api.tracks(uid).catch(() => []), [uid])
+  const tracks = (road.data ?? []).map(t => {
+    const cs = t.subjects.flatMap(s => s.chapters)
+    return { t, next: cs.find(c => c.status === 'in_progress') ?? cs.find(c => c.status === 'unlocked'), pct: cs.length ? cs.reduce((a, c) => a + c.mastery_score, 0) / cs.length : 0, done: cs.filter(c => c.status === 'completed').length, total: cs.length }
+  })
   const [energy, setEnergy] = useState('ok')
   const [active, setActive] = useState<SessionStart | null>(null)
   const [startedAt, setStartedAt] = useState(0)
@@ -36,23 +42,48 @@ export default function Dashboard() {
   }
 
   const needsIntake = coach.error?.includes('profile')
-  const s = coach.data?.stats
-  const tiles: [IconName, string, string | number, string, string][] = s ? [
-    ['flame', 'orange', s.current_streak, 'Day streak', ''], ['star', '', s.total_xp, 'Total XP', ''],
-    ['clock', 'green', s.total_minutes, 'Minutes studied', ''], ['alert', 'red', s.unresolved_mistakes, 'Open mistakes', ''],
-  ] : []
+  const st = coach.data?.stats
   const hour = new Date().getHours()
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  const focus = tracks.find(x => x.next)
+  const overall = tracks.length ? tracks.reduce((a, x) => a + x.pct, 0) / tracks.length : 0
+  const chips: [IconName, string, string | number, string][] = st ? [
+    ['flame', 'orange', st.current_streak, 'day streak'], ['star', 'spark', st.total_xp, 'XP'],
+    ['clock', 'green', st.total_minutes, 'min studied'], ['alert', 'red', st.unresolved_mistakes, 'open mistakes'],
+  ] : []
 
   return (
     <>
-      <PageHeader title={`${greet}, ${session!.username}`} sub="Here's your progress and today's plan." />
-      {coach.loading && <Skeleton lines={3} />}
-      {needsIntake && <Empty icon="target" title="Set up your goal" action={<Link to="/onboarding"><button>Get started <Icon name="arrow" size={16} /></button></Link>}>
-        Tell us what you want to learn and by when. We'll build a personalised roadmap.</Empty>}
-      {s && <div className="stats">{tiles.map(([ic, tone, v, l]) => (
-        <div className="card" key={l}><span className={`stat-icon ${tone}`}><Icon name={ic} size={20} /></span>
-          <div><div className="stat">{v}</div><div className="stat-label">{l}</div></div></div>))}</div>}
+      {coach.loading && <><PageHeader title={`${greet}, ${session!.username}`} /><Skeleton lines={3} /></>}
+      {needsIntake && <><PageHeader title={`${greet}, ${session!.username}`} /><Empty icon="target" title="Set up your goal" action={<Link to="/onboarding"><button>Get started <Icon name="arrow" size={16} /></button></Link>}>
+        Tell us what you want to learn and by when. We'll build a personalised roadmap.</Empty></>}
+      {st && (
+        <section className="hero" aria-label="Today">
+          <div className="hero-main">
+            <span className="hero-eyebrow">{today}</span>
+            <h1>{greet}, <span className="grad-text">{session!.username}</span></h1>
+            <p className="hero-sub">{focus ? <>Pick up where you left off in <b>{focus.t.specialization}</b>.</> : tracks.length ? 'You\'ve finished every chapter. Review your flashcards to keep it fresh.' : 'Create your first track to get a personalised plan.'}</p>
+            <div className="row hero-actions">
+              {focus ? <Link to={`/chapters/${focus.next!.id}`}><button className="lg">{focus.next!.status === 'in_progress' ? 'Continue' : 'Start'}: {focus.next!.title} <Icon name="arrow" size={16} /></button></Link>
+                : <Link to={tracks.length ? '/flashcards' : '/onboarding'}><button className="lg">{tracks.length ? 'Review flashcards' : 'Build my roadmap'} <Icon name="arrow" size={16} /></button></Link>}
+              {focus && <Link to={`/tutor?chapter=${focus.next!.id}`}><button className="ghost lg"><Icon name="chat" size={16} />Ask tutor</button></Link>}
+            </div>
+          </div>
+          <div className="hero-side">
+            {tracks.length > 0 && <div className="hero-ring"><ProgressRing value={overall} size={96} stroke={9} tone="spark" label={`Overall mastery ${Math.round(overall)} percent`}>
+              <b className="num"><CountUp value={Math.round(overall)} />%</b></ProgressRing><span className="muted">Overall mastery</span></div>}
+            <div className="hero-chips">{chips.map(([ic, tone, v, l]) => (
+              <div className="hero-chip" key={l}><span className={`stat-icon ${tone}`}><Icon name={ic} size={16} /></span><b className="num"><CountUp value={Number(v)} /></b><span className="muted">{l}</span></div>))}</div>
+          </div>
+        </section>)}
+
+      {!needsIntake && !coach.loading && tracks.length > 0 && (
+        <div className="card">
+          <div className="card-head"><h2>{tracks.length > 1 ? 'Your tracks' : 'Continue learning'}</h2><Link to="/roadmap" className="muted">Manage</Link></div>
+          <div className="track-grid stagger">{tracks.map(({ t }) => <TrackCard key={t.id} track={t} />)}</div></div>)}
+      {!needsIntake && !coach.loading && !road.loading && tracks.length === 0 && (
+        <Empty icon="map" title="No roadmap yet" action={<Link to="/onboarding"><button>Build my roadmap</button></Link>}>Your goal is saved, but there's no study plan yet.</Empty>)}
 
       {!needsIntake && !coach.loading && (
         <div className="cols">

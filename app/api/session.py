@@ -78,35 +78,20 @@ async def end_session(request: SessionEndRequest, db: AsyncSession = Depends(get
 @router.post("/reschedule")
 async def reschedule_study_plan(user_id: str, db: AsyncSession = Depends(get_db)):
     """Dynamically re-allocate tasks and check pace against deadline."""
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    from app.models.entities import Roadmap, Subject, Chapter
+    from app.services.track_service import TrackService
     from app.services.rescheduler_service import ReschedulerService
 
     profile = await db.get(UserProfile, user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    stmt = (
-        select(Roadmap)
-        .where(Roadmap.user_id == user_id, Roadmap.is_active == True)
-        .options(selectinload(Roadmap.subjects).selectinload(Subject.chapters))
-    )
-    res = await db.execute(stmt)
-    roadmap = res.scalar_one_or_none()
+    tracks = await TrackService.select(db, user_id)
 
-    if not roadmap:
-        raise HTTPException(status_code=404, detail="No active roadmap found to reschedule")
-
-    chapters_data = []
-    for subj in roadmap.subjects:
-        for chap in subj.chapters:
-            chapters_data.append({
-                "id": chap.id,
-                "title": chap.title,
-                "estimated_hours": chap.estimated_hours,
-                "status": chap.status,
-            })
+    # Parallel tracks share the same time budget, so pace is judged across all of them.
+    chapters_data = [
+        {"id": chap.id, "title": chap.title, "estimated_hours": chap.estimated_hours, "status": chap.status}
+        for roadmap in tracks for subj in roadmap.subjects for chap in subj.chapters
+    ]
 
     report = ReschedulerService.analyze_and_reschedule(
         goal=profile.goal,

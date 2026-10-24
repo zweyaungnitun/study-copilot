@@ -12,6 +12,7 @@ export default function Onboarding() {
   const [quiz, setQuiz] = useState<DiagQ[] | null>(null)
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [result, setResult] = useState<DiagResult | null>(null)
+  const [prefs, setPrefs] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -26,7 +27,7 @@ export default function Onboarding() {
   const submitQuiz = () => run(async () => {
     setResult(await api.submitDiagnostic(uid, f.goal, Object.entries(answers).map(([question_id, selected_option_index]) => ({ question_id, selected_option_index }))))
   })
-  const build = () => run(async () => { await api.generateRoadmap(uid); nav('/roadmap') })
+  const build = () => run(async () => { await api.generateRoadmap(uid, prefs.trim()); nav('/roadmap') })
   const step = result ? 3 : quiz ? 2 : 1
   const steps = <div className="steps" aria-label={`Step ${step} of 3`}>{[1, 2, 3].map(n => <div key={n} className={n <= step ? 'done' : ''} />)}</div>
   const today = new Date().toISOString().slice(0, 10)
@@ -36,6 +37,10 @@ export default function Onboarding() {
       <PageHeader title={`You're at ${result.calibrated_level} level`} sub={`Diagnostic score: ${Math.round(result.score_percentage)}%`} />
       <div className="card"><h2>Recommended focus</h2><p>{result.recommended_focus}</p>
         {result.identified_weaknesses.length > 0 && <div className="row" style={{ marginTop: 12 }}>{result.identified_weaknesses.map(w => <span key={w} className="badge yellow">{w}</span>)}</div>}</div>
+      <div className="card"><label htmlFor="prefs" style={{ marginTop: 0 }}>Anything the AI should know? <span className="muted">(optional)</span></label>
+        <textarea id="prefs" rows={3} maxLength={1000} value={prefs} onChange={e => setPrefs(e.target.value)}
+          placeholder="e.g. Focus on exam-style problems, I'm weak at calculus, skip the history…" />
+        <p className="muted" style={{ marginTop: 8 }}>You can also refine the roadmap afterwards by chatting with the AI advisor.</p></div>
       {err && <ErrorBox>{err}</ErrorBox>}
       <button className="lg" disabled={busy} onClick={build}>{busy ? <Spinner /> : <Icon name="map" size={16} />}{busy ? 'Building your roadmap…' : 'Generate my roadmap'}</button>
     </div>)

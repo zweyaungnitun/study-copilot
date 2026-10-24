@@ -10,6 +10,7 @@ class BrainMapNode(BaseModel):
     color: str  # green, yellow, red, gray
     mastery_percentage: float
     days_since_review: Optional[float] = None
+    track: Optional[str] = None  # roadmap (track) the topic belongs to
 
 
 class BrainMapEdge(BaseModel):
