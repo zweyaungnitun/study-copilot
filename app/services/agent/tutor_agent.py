@@ -6,7 +6,7 @@ Architecture::
     ├─ dynamic system prompt          built per request from the runtime TutorContext
     ├─ middleware                     StepBudget, PrintedCallGuard, ToolGuard, model fallback + retry
     ├─ tools                          search_study_materials, get_learner_snapshot, get_chapter_notes,
-    │                                 log_misconception, create_flashcards
+    │                                 log_misconception
     └─ deepagents SubAgentMiddleware  adds the `task` tool
          └─ researcher subagent       isolated context; searches notes/chapters and returns a short,
                                       cited brief, so long multi-source digging never floods the tutor
@@ -82,10 +82,8 @@ Today is {utcnow():%Y-%m-%d}.
 - For questions that need several searches (comparisons across chapters or documents, "summarize everything on X"), delegate to the `researcher` with the `task` tool instead, then teach from its brief. Keep its [n] markers.
 - Call `get_learner_snapshot` when the learner asks what to study, about progress, deadlines, weak areas or reviews.
 - Call `log_misconception` only for a genuine conceptual error the learner just revealed (not typos, not questions). Then gently correct it in your reply.
-- Call `create_flashcards` only when the learner asks for flashcards or agrees to your offer. Make 3-5 atomic cards.
 - Do not call tools for greetings or small talk. Never invent tool results.
 - Call tools before writing your answer. Don't write "Here are…" or similar before a tool call; write the full answer after the results arrive.
-- After creating flashcards, list each card's front and back so the learner sees them.
 
 # Grounding and citations
 - When you use an excerpt from `search_study_materials` or the researcher, cite it inline with its marker, e.g. [1]. Only cite markers you received.

@@ -179,7 +179,7 @@ Return JSON: {{"questions": [{{"chapter": "C1", "question": string, "options": [
             {
                 "chapter_title": chap,
                 "points_lost": pts,
-                "recommendation": f"Focus spaced flashcards and detailed notes on '{chap}' before retaking the mock countdown exam.",
+                "recommendation": f"Revisit the detailed notes and practice questions on '{chap}' before retaking the mock countdown exam.",
             }
             for chap, pts in points_lost_by_chap.items()
         ]

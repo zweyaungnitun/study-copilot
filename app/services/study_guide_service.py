@@ -144,7 +144,7 @@ unsure of. Never invent URLs. Use https.
                 {"title": "Get the big picture", "minutes": share(0.15), "activity": "Read the Simple notes and watch a short intro video."},
                 {"title": "Study the details", "minutes": share(0.35), "activity": "Work through the Detailed notes, writing down each new term."},
                 {"title": "Practise", "minutes": share(0.35), "activity": "Do the practice exercises below without looking at the notes."},
-                {"title": "Review", "minutes": share(0.15), "activity": "Make flashcards and check your answers with the AI tutor."},
+                {"title": "Review", "minutes": share(0.15), "activity": "Summarize the chapter from memory and check it with the AI tutor."},
             ],
             "practice": [
                 f"Summarise {chapter_title} in three sentences.",

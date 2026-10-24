@@ -45,7 +45,7 @@ async def get_weekly_report(user_id: str = Query(...), db: AsyncSession = Depend
 
 ## Actionable Pedagogical Adjustments
 - You have **{unresolved_mistakes}** mistakes logged in your Mistake Notebook requiring re-test.
-- When energy is low, rely on the rapid 10-minute flashcard deck rather than skipping study entirely.
+- When energy is low, skim a cheat sheet for 10 minutes rather than skipping study entirely.
 - Prioritize high-retention spaced reviews before introducing brand-new chapter modules.
 """
 

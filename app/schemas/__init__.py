@@ -19,12 +19,6 @@ from app.schemas.roadmap import (
     RoadmapResponse,
 )
 from app.schemas.note import NoteResponse, NoteTierContentResponse
-from app.schemas.flashcard import (
-    FlashcardSchema,
-    FlashcardGenerateRequest,
-    FlashcardReviewRequest,
-    FlashcardReviewResponse,
-)
 from app.schemas.tutor import TutorChatRequest, TutorChatResponse
 from app.schemas.session import (
     SessionStartRequest,
@@ -79,10 +73,6 @@ __all__ = [
     "RoadmapResponse",
     "NoteResponse",
     "NoteTierContentResponse",
-    "FlashcardSchema",
-    "FlashcardGenerateRequest",
-    "FlashcardReviewRequest",
-    "FlashcardReviewResponse",
     "TutorChatRequest",
     "TutorChatResponse",
     "SessionStartRequest",

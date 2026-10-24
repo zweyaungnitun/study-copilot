@@ -26,7 +26,6 @@ class TutorContext:
     hint_level: int = 1
     citations: List[Dict[str, Any]] = field(default_factory=list)
     misconceptions: List[str] = field(default_factory=list)
-    cards_created: int = 0
     used_notes: bool = False
     # Run bookkeeping used by the middleware.
     steps: List[Dict[str, Any]] = field(default_factory=list)

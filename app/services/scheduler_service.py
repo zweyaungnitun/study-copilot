@@ -8,7 +8,7 @@ class SchedulerService:
     """Energy-aware dynamic daily scheduler."""
 
     @classmethod
-    def plan_session(cls, energy_level: str, due_cards_count: int = 5) -> List[SessionTask]:
+    def plan_session(cls, energy_level: str) -> List[SessionTask]:
         """Generate tailored session tasks based on learner energy level."""
         energy = energy_level.lower()
 
@@ -17,7 +17,7 @@ class SchedulerService:
                 SessionTask(
                     id=str(uuid.uuid4()),
                     type="review",
-                    title="Warm-up Flashcard Retrieval",
+                    title="Warm-up Recall of Last Session",
                     estimated_minutes=10,
                 ),
                 SessionTask(
@@ -37,8 +37,8 @@ class SchedulerService:
             return [
                 SessionTask(
                     id=str(uuid.uuid4()),
-                    type="flashcard",
-                    title="Rapid Low-Friction Flashcard Review",
+                    type="review",
+                    title="Rapid Low-Friction Recall Check",
                     estimated_minutes=10,
                 ),
                 SessionTask(
@@ -52,8 +52,8 @@ class SchedulerService:
             return [
                 SessionTask(
                     id=str(uuid.uuid4()),
-                    type="flashcard",
-                    title="Spaced Repetition Review Deck",
+                    type="review",
+                    title="Review Earlier Chapters",
                     estimated_minutes=15,
                 ),
                 SessionTask(

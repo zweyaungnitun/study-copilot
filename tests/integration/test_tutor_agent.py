@@ -58,7 +58,6 @@ async def test_stream_runs_tools_and_persists(client: AsyncClient, scripted):
     models = scripted([
         turn(call("search_study_materials", query="paxos majority quorum acceptors"),
              call("log_misconception", misconception="Thinks Paxos needs every acceptor", correct_idea="A majority suffices")),
-        turn(call("create_flashcards", cards=[{"front": "Paxos quorum?", "back": "A majority of acceptors"}])),
         turn("A **majority** is enough [1]."),
     ])
     r = await client.post("/api/tutor/chat/stream", json={"user_id": uid, "chapter_id": chapter["id"], "session_id": sid,
@@ -66,13 +65,13 @@ async def test_stream_runs_tools_and_persists(client: AsyncClient, scripted):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(r.text)
     kinds = [e for e, _ in events]
-    assert kinds[-1] == "done" and "delta" in kinds and kinds.count("step") == 6
+    assert kinds[-1] == "done" and "delta" in kinds and kinds.count("step") == 4
     done = events[-1][1]["response"]
     assert done["agent"] is True and done["source"] == "📚 From your notes"
     assert done["reply"] == "A **majority** is enough [1]."
     assert done["citations"][0]["filename"] == "paxos.txt"
     assert done["detected_misconception"] == "Thinks Paxos needs every acceptor"
-    assert [s["tool"] for s in done["steps"]] == ["search_study_materials", "log_misconception", "create_flashcards"]
+    assert [s["tool"] for s in done["steps"]] == ["search_study_materials", "log_misconception"]
     assert done["suggestions"] == SUGGESTIONS["suggestions"]
 
     # The dynamic system prompt carries the learner, chapter and the subagent (`task`) guidance.
@@ -82,10 +81,8 @@ async def test_stream_runs_tools_and_persists(client: AsyncClient, scripted):
 
     mistakes = (await client.get("/api/mistakes", params={"user_id": uid})).json()
     assert any(m["misconception_tag"] == "Thinks Paxos needs every acceptor" for m in mistakes)
-    cards = (await client.get("/api/flashcards/due", params={"chapter_id": chapter["id"]})).json()
-    assert any(c["front"] == "Paxos quorum?" for c in cards)
     saved = (await client.get(f"/api/chats/{sid}", params={"user_id": uid})).json()["messages"]
-    assert saved[-1]["meta"]["citations"][0]["n"] == 1 and len(saved[-1]["meta"]["steps"]) == 3
+    assert saved[-1]["meta"]["citations"][0]["n"] == 1 and len(saved[-1]["meta"]["steps"]) == 2
 
 
 async def test_tutor_delegates_research_to_the_subagent(client: AsyncClient, scripted):

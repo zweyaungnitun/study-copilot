@@ -3,7 +3,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.intake import IntakeProfileRequest
-from app.schemas.flashcard import FlashcardReviewRequest
 
 
 def test_intake_deadline_validation():
@@ -26,14 +25,3 @@ def test_intake_deadline_validation():
     )
     assert req.hours_per_day == 2.5
 
-
-def test_flashcard_review_score_range():
-    """Quality rating must be between 0 and 5."""
-    with pytest.raises(ValidationError):
-        FlashcardReviewRequest(quality=6)
-
-    with pytest.raises(ValidationError):
-        FlashcardReviewRequest(quality=-1)
-
-    valid = FlashcardReviewRequest(quality=4)
-    assert valid.quality == 4

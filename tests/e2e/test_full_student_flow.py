@@ -11,17 +11,16 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     1. Auth & Registration
     2. Diagnostic Intake & Assessment
     3. Roadmap DAG Synthesis
-    4. Multi-Tier Notes & Flashcards
-    5. Spaced Repetition (SM-2) Review Cycles
-    6. Material Upload & Dual-Source RAG Ingestion
-    7. Socratic Tutor & Misconception Tracker
-    8. Mistake Notebook Drilling
-    9. Energy-Aware Session Logging & Dynamic Timetable Rescheduler
-    10. Brain Map Retention Decay Graph
-    11. Weekly AI Coach Report Card
-    12. Timed Mock Countdown Simulator
-    13. Offline Study Pack Export & Sync
-    14. Consistency Leaderboard Ranking
+    4. Multi-Tier Notes
+    5. Material Upload & Dual-Source RAG Ingestion
+    6. Socratic Tutor & Misconception Tracker
+    7. Mistake Notebook Drilling
+    8. Energy-Aware Session Logging & Dynamic Timetable Rescheduler
+    9. Brain Map Retention Decay Graph
+    10. Weekly AI Coach Report Card
+    11. Timed Mock Countdown Simulator
+    12. Offline Study Pack Export & Sync
+    13. Consistency Leaderboard Ranking
     """
     # 1. Auth & Registration
     reg_resp = await client.post(
@@ -94,26 +93,7 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     notes = notes_resp.json()
     assert "simple_content" in notes and "detailed_content" in notes and "cheat_sheet" in notes
 
-    # 5. Spaced Repetition (SM-2) Flashcards
-    fc_resp = await client.post(
-        "/api/flashcards/generate",
-        json={"chapter_id": chapter_id, "count": 6},
-    )
-    assert fc_resp.status_code == 200
-    cards = fc_resp.json()
-    assert len(cards) >= 3
-    card_id = cards[0]["id"]
-
-    # SM-2 Reviews
-    rev1 = await client.post(f"/api/flashcards/{card_id}/review", json={"quality": 4})
-    assert rev1.status_code == 200
-    assert rev1.json()["reps"] == 1 and rev1.json()["interval"] == 1
-
-    rev2 = await client.post(f"/api/flashcards/{card_id}/review", json={"quality": 5})
-    assert rev2.status_code == 200
-    assert rev2.json()["reps"] == 2 and rev2.json()["interval"] == 6
-
-    # 6. Material Upload & Dual-Source RAG
+    # 5. Material Upload & Dual-Source RAG
     sample_text = (
         "Superposition and Entanglement in Quantum Mechanics:\n"
         "A qubit state is represented as |psi> = alpha|0> + beta|1>. "
@@ -139,7 +119,7 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert rag_resp.status_code == 200
     assert rag_resp.json()["badge"] == "📚 From your notes"
 
-    # 7. Socratic Tutor Interaction
+    # 6. Socratic Tutor Interaction
     tutor_resp = await client.post(
         "/api/tutor/chat",
         json={
@@ -153,7 +133,7 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert tutor_resp.status_code == 200
     assert tutor_resp.json()["reply"] is not None
 
-    # 8. Mistake Notebook & Spaced Retest
+    # 7. Mistake Notebook & Spaced Retest
     m_resp = await client.post(
         "/api/mistakes",
         json={
@@ -178,7 +158,7 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert res_mistake.status_code == 200
     assert res_mistake.json()["resolved"] is True
 
-    # 9. Study Session & Rescheduling
+    # 8. Study Session & Rescheduling
     s_start = await client.post("/api/session/start", json={"user_id": user_id, "energy_level": "high"})
     assert s_start.status_code == 200
     sess_id = s_start.json()["session_id"]
@@ -200,19 +180,19 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert reschedule.status_code == 200
     assert "days_remaining" in reschedule.json()
 
-    # 10. Brain Map Retention Decay Graph
+    # 9. Brain Map Retention Decay Graph
     bm_resp = await client.get(f"/api/brain-map?user_id={user_id}")
     assert bm_resp.status_code == 200
     bm = bm_resp.json()
     assert len(bm["nodes"]) > 0
     assert "edges" in bm
 
-    # 11. Weekly AI Coach Report
+    # 10. Weekly AI Coach Report
     coach_resp = await client.get(f"/api/coach/weekly-report?user_id={user_id}")
     assert coach_resp.status_code == 200
     assert len(coach_resp.json()["report_markdown"]) > 50
 
-    # 12. Timed Mock Simulator
+    # 11. Timed Mock Simulator
     exam_resp = await client.post(
         "/api/exam/generate",
         json={"user_id": user_id, "question_count": 6, "time_limit_minutes": 20},
@@ -232,12 +212,12 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert sub.status_code == 200
     assert sub.json()["score"] == 6
 
-    # 13. Offline Pack Bundler & Sync
+    # 12. Offline Pack Bundler & Sync
     pack = await client.post(f"/api/sync/offline-bundle?user_id={user_id}")
     assert pack.status_code == 200
-    assert len(pack.json()["flashcards"]) > 0
+    assert len(pack.json()["notes"]) > 0
 
-    # 14. Consistency Leaderboard
+    # 13. Consistency Leaderboard
     lead = await client.get("/api/leaderboard")
     assert lead.status_code == 200
     assert lead.json()["total_participants"] >= 1

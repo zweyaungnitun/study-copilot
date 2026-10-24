@@ -7,7 +7,6 @@ from app.api.chats import router as chats_router
 from app.api.chapters import router as chapters_router
 from app.api.coach import router as coach_router
 from app.api.exam import router as exam_router
-from app.api.flashcards import router as flashcards_router
 from app.api.intake import router as intake_router
 from app.api.leaderboard import router as leaderboard_router
 from app.api.materials import router as materials_router
@@ -26,7 +25,6 @@ api_router.include_router(intake_router)
 api_router.include_router(roadmap_router)
 api_router.include_router(chapters_router)
 api_router.include_router(chats_router)
-api_router.include_router(flashcards_router)
 api_router.include_router(materials_router)
 api_router.include_router(tutor_router)
 api_router.include_router(mistakes_router)

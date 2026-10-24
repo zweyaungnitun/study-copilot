@@ -52,7 +52,7 @@ class BrainMapService:
             else:
                 days_since = 3.0  # default 3 days if unreviewed
 
-            # Base stability on mastery score or average flashcard interval
+            # Base stability on mastery score
             interval = max(1, int(chapter.mastery_score / 10.0)) if chapter.mastery_score > 0 else 1
             retention = cls.calculate_retention(days_since, interval=interval, ease=2.5) if not is_locked else 0.0
 

@@ -75,22 +75,7 @@ async def test_full_onboarding_and_intake_flow(client: AsyncClient):
     assert "## Summary" in notes_data["detailed_content"]
     assert "## Key Points" in notes_data["detailed_content"]
 
-    # 7. Generate flashcards
-    fc_gen_resp = await client.post(
-        "/api/flashcards/generate", json={"chapter_id": chapter_id, "count": 3}
-    )
-    assert fc_gen_resp.status_code == 200
-    cards = fc_gen_resp.json()
-    assert len(cards) >= 1
-
-    # 8. Review flashcard with SM-2 rating 5
-    card_id = cards[0]["id"]
-    rev_resp = await client.post(f"/api/flashcards/{card_id}/review", json={"quality": 5})
-    assert rev_resp.status_code == 200
-    assert rev_resp.json()["interval"] == 1
-    assert rev_resp.json()["reps"] == 1
-
-    # 9. Start and end daily study session
+    # 7. Start and end daily study session
     sess_start_resp = await client.post(
         "/api/session/start", json={"user_id": user_id, "energy_level": "high"}
     )

@@ -10,7 +10,7 @@ class SessionStartRequest(BaseModel):
 
 class SessionTask(BaseModel):
     id: str
-    type: str  # review, flashcard, quiz, deep_dive
+    type: str  # review, quiz, deep_dive
     title: str
     estimated_minutes: int
     completed: bool = False
