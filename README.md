@@ -7,10 +7,9 @@ An adaptive, offline-resilient AI study copilot. StudyPilot builds a personalise
 - **Intake & diagnostics**: learner profile plus a diagnostic quiz to find starting knowledge.
 - **Roadmap generation**: a dependency-aware (DAG) study plan, rescheduled when the student falls behind.
 - **Materials pipeline**: upload textbooks (PDF), scans or photos of notebooks (OCR), Markdown/text notes and Jupyter notebooks. A background job extracts the text, builds an outline (PDF bookmarks → font-size headings → Markdown headings → LLM segmentation → page windows), summarizes each section, and indexes section-aware chunks for hybrid retrieval. Progress, re-index and delete are in the Library.
-- **Curriculum from your materials**: pick uploaded materials and the curriculum is built from their outline. Sections become chapters (grouped by the LLM, validated in code, with a reading-order fallback), hours come from word counts, front/back matter is skipped by default, and over-budget plans get suggested skips. Chapters stay linked to their pages, so notes, guides, flashcards, exams and the tutor are grounded in them.
-- **Study schedule**: a deterministic day-by-day plan across tracks: prerequisite order, ≤50-minute sessions, daily flashcard review sized from the SM-2 forecast, a buffer day each week, and final review + mock exams before the deadline. Missed work is re-packed on rebuild.
-- **Agentic tutor**: a streaming, tool-using Socratic tutor. It searches your notes with hybrid keyword + semantic retrieval and cites them, reads chapter notes and your progress, logs misconceptions to the Mistake Notebook and creates flashcards on request. Built with LangChain `create_agent` on the LangGraph runtime, with guardrail middleware and a deepagents research subagent for multi-source questions. See `app/services/agent/`.
-- **Flashcards**: generated cards reviewed with the SM-2 spaced-repetition algorithm.
+- **Curriculum from your materials**: pick uploaded materials and the curriculum is built from their outline. Sections become chapters (grouped by the LLM, validated in code, with a reading-order fallback), hours come from word counts, front/back matter is skipped by default, and over-budget plans get suggested skips. Chapters stay linked to their pages, so notes, guides, exams and the tutor are grounded in them.
+- **Study schedule**: a deterministic day-by-day plan across tracks: prerequisite order, ≤50-minute sessions, a daily review block for earlier chapters, a buffer day each week, and final review + mock exams before the deadline. Missed work is re-packed on rebuild.
+- **Agentic tutor**: a streaming, tool-using Socratic tutor. It searches your notes with hybrid keyword + semantic retrieval and cites them, reads chapter notes and your progress, and logs misconceptions to the Mistake Notebook. Built with LangChain `create_agent` on the LangGraph runtime, with guardrail middleware and a deepagents research subagent for multi-source questions. See `app/services/agent/`.
 - **Mistake notebook**: records errors and misconceptions, with targeted drills.
 - **Exam simulator**: timed mock exams with browser proctoring (tab switches, fullscreen exits, clipboard use and a heartbeat feed a 100-point integrity score).
 - **Admin console** (`/admin`): platform dashboard, live exam proctoring (warn, terminate, review flagged attempts), users & roles, and LLM token management.
@@ -40,7 +39,7 @@ app/
   core/       # config, database, security, vector store, RAG store
   models/     # SQLAlchemy entities
   schemas/    # Pydantic request/response models
-  services/   # business logic (LLM, SM-2, roadmap, RAG, ...)
+  services/   # business logic (LLM, roadmap, RAG, scheduling, ...)
   main.py     # app entry point
   worker.py   # ARQ worker (ingestion jobs)
 frontend/     # React + Vite client
@@ -128,7 +127,6 @@ Set these in `.env` (see [.env.example](.env.example)):
 | `/api/materials` | upload (202, processed in the background), list, status, outline, re-index, delete, storage, hybrid search |
 | `/api/schedule` | build/rebuild the day-by-day plan, list tasks, mark done/skipped |
 | `/api/tutor` | Socratic chat |
-| `/api/flashcards` | generate, due cards, review |
 | `/api/mistakes` | log, list, resolve, drill |
 | `/api/exam` | generate and submit mock exams, proctoring heartbeat, my attempts |
 | `/api/usage` | the signed-in user's token quota and usage |
