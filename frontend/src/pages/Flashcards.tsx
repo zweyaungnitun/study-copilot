@@ -6,6 +6,7 @@ import { useLoad } from '../hooks'
 import { Empty, ErrorBox, PageHeader, ProgressBar, Skeleton } from '../ui'
 
 const labels = ['Blackout', 'Wrong', 'Hard-ish', 'Hard', 'Good', 'Easy']
+const prompts: Record<string, string> = { qa: 'Question', cloze: 'Fill in the blank', truefalse: 'True or false?' }
 
 export default function Flashcards() {
   const { session } = useAuth()
@@ -46,7 +47,7 @@ export default function Flashcards() {
         <ProgressBar value={(i / data!.length) * 100} />
         <button className={`flip ${flipped ? 'back' : ''}`} style={{ marginTop: 16 }} onClick={() => setFlipped(f => !f)} aria-label="Flip card">
           <div key={String(flipped) + card.id}>
-            <div className="side">{flipped ? 'Answer' : 'Question'}</div>
+            <div className="side">{flipped ? 'Answer' : prompts[card.type] ?? 'Question'}</div>
             <div className="text">{flipped ? card.back : card.front}</div>
             <div className="src">{flipped ? card.source_citation || card.source : 'Tap to reveal the answer'}</div>
           </div>

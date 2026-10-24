@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.entities import CardReview, Chapter, Flashcard, Note, Roadmap, Subject
+from app.models.entities import CardReview, Chapter, Flashcard, Roadmap, Subject, UserProfile
 from app.schemas.flashcard import (
     FlashcardGenerateRequest,
     FlashcardReviewRequest,
@@ -13,6 +13,9 @@ from app.schemas.flashcard import (
     FlashcardSchema,
 )
 from app.services.flashcard_service import FlashcardService
+from app.services.notes_service import NotesService
+from app.services.progress_service import ProgressService
+from app.services.rag_service import RAGService
 from app.services.sm2_service import SM2Engine
 
 router = APIRouter(prefix="/flashcards", tags=["Flashcards & Spaced Repetition"])
@@ -23,39 +26,32 @@ async def generate_flashcards(
     request: FlashcardGenerateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate high-yield atomic flashcards for chapter."""
+    """Generate atomic flashcards for a chapter, grounded in its notes and the learner's uploads.
+
+    New cards skip facts the chapter's existing cards already test.
+    """
     chapter = await db.get(Chapter, request.chapter_id)
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
+    subject = await db.get(Subject, chapter.subject_id)
+    roadmap = await db.get(Roadmap, subject.roadmap_id) if subject else None
+    profile = await db.get(UserProfile, roadmap.user_id) if roadmap else None
 
-    note_stmt = select(Note).where(Note.chapter_id == request.chapter_id)
-    note_res = await db.execute(note_stmt)
-    note = note_res.scalar_one_or_none()
-    note_content = note.detailed_content if note else ""
+    note = await NotesService.ensure_note(db, chapter)
+    notes = "\n\n".join(t for t in (note.detailed_content, note.exam_content) if t)
+    excerpts = []
+    if roadmap:
+        rag = await RAGService.for_chapter(db, roadmap.user_id, chapter.id, f"{chapter.title} {subject.name if subject else ''}")
+        excerpts = rag["matches"]
+    existing = (await db.execute(select(Flashcard.front).where(Flashcard.chapter_id == chapter.id))).scalars().all()
 
     cards_data = await FlashcardService.generate_cards_for_chapter(
-        chapter_title=chapter.title,
-        note_content=note_content,
-        count=request.count,
+        chapter_title=chapter.title, note_content=notes, count=request.count,
+        subject=subject.name if subject else "", level=profile.level if profile else "",
+        excerpts=excerpts, existing_fronts=existing,
     )
-
-    created_cards = []
-    for cd in cards_data:
-        card = Flashcard(
-            chapter_id=request.chapter_id,
-            type=cd["type"],
-            front=cd["front"],
-            back=cd["back"],
-            source=cd["source"],
-            source_citation=cd["source_citation"],
-            reps=cd["reps"],
-            ease=cd["ease"],
-            interval=cd["interval"],
-            next_review=cd["next_review"],
-        )
-        db.add(card)
-        created_cards.append(card)
-
+    created_cards = [Flashcard(chapter_id=chapter.id, **cd) for cd in cards_data]
+    db.add_all(created_cards)
     await db.flush()
     return created_cards
 
@@ -125,6 +121,7 @@ async def review_flashcard(
     )
     db.add(review_log)
     await db.flush()
+    await ProgressService.refresh_mastery_from_cards(db, card.chapter_id)
 
     return FlashcardReviewResponse(
         flashcard_id=card.id,
