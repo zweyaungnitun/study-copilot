@@ -35,7 +35,7 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     assert user_id and token
 
     # Check /api/auth/me
-    me_resp = await client.get(f"/api/auth/me?user_id={user_id}")
+    me_resp = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_resp.status_code == 200
     assert me_resp.json()["username"] == "e2e_valedictorian"
 
@@ -123,15 +123,17 @@ async def test_complete_end_to_end_student_lifecycle(client: AsyncClient):
     file_bytes = io.BytesIO(sample_text.encode("utf-8"))
     upload_resp = await client.post(
         "/api/materials/upload",
-        data={"user_id": user_id, "chapter_id": chapter_id},
+        data={"user_id": user_id},
         files={"file": ("quantum_notes.txt", file_bytes, "text/plain")},
+        headers={"Authorization": f"Bearer {token}"},
     )
-    assert upload_resp.status_code == 201
+    assert upload_resp.status_code == 202
+    assert upload_resp.json()["status"] == "ready"
     assert upload_resp.json()["chunk_count"] >= 1
 
     # RAG Query with note attribution
     rag_resp = await client.post(
-        "/api/materials/query",
+        "/api/materials/query", headers={"Authorization": f"Bearer {token}"},
         json={"user_id": user_id, "query": "What is the Bell state maximal entanglement equation?", "top_k": 2},
     )
     assert rag_resp.status_code == 200

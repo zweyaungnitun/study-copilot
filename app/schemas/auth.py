@@ -18,6 +18,7 @@ class UserLoginRequest(BaseModel):
 class AuthTokenResponse(BaseModel):
     user_id: str
     username: str
+    role: str = "student"
     token: str
     token_type: str = "bearer"
 
@@ -28,5 +29,6 @@ class UserResponse(BaseModel):
     id: str
     username: str
     email: Optional[str] = None
+    role: str = "student"
     created_at: datetime
 

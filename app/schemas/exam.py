@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -55,3 +55,51 @@ class ExamEvaluationResponse(BaseModel):
     time_taken_seconds: Optional[int] = None
     points_lost_by_category: List[PointsLostCategory]
     overall_feedback: str
+    integrity_score: Optional[int] = None
+    flag_count: Optional[int] = None
+
+
+ProctorEventType = Literal[
+    "tab_hidden", "window_blur", "fullscreen_exit", "fullscreen_enter", "copy", "paste",
+    "context_menu", "print_screen", "multiple_screens", "exam_started",
+]
+
+
+class ProctorEventIn(BaseModel):
+    type: ProctorEventType
+    detail: Optional[str] = Field(default=None, max_length=500)
+
+
+class ProctorReportRequest(BaseModel):
+    """Heartbeat from the exam page, with any integrity events since the last one."""
+    events: List[ProctorEventIn] = Field(default_factory=list, max_length=50)
+
+
+class ProctorReportResponse(BaseModel):
+    status: str
+    warning: Optional[str] = None
+    termination_reason: Optional[str] = None
+    integrity_score: int
+
+
+class ExamAttemptSummary(BaseModel):
+    id: str
+    user_id: str
+    username: str = ""
+    title: str
+    status: str
+    started_at: datetime
+    submitted_at: Optional[datetime] = None
+    time_limit_minutes: int
+    question_count: int
+    score: Optional[int] = None
+    percentage: Optional[float] = None
+    integrity_score: int
+    risk: str
+    flag_count: int
+    live: bool
+    overdue: bool
+    last_heartbeat_at: Optional[datetime] = None
+    termination_reason: Optional[str] = None
+    review_verdict: Optional[str] = None
+    review_note: Optional[str] = None
