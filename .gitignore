@@ -53,6 +53,7 @@ uploads/*
 
 # Pytest / Coverage
 .pytest_cache/
+.deepeval/
 .coverage
 htmlcov/
 

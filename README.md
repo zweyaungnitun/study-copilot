@@ -154,6 +154,8 @@ RAG_QUALITY_LIVE=1 pytest tests/quality                 # same, with live Gemini
 PGVECTOR_TEST_URL=postgresql+asyncpg://studypilot:studypilot@localhost:5432/pgv_test pytest tests/integration/test_storage_backends.py
 ```
 
+`tests/evals` holds LLM quality evals (see below); they are skipped unless `DEEPEVAL_LIVE=1`.
+
 Tests process uploads inline and give each test its own Chroma store and upload directory. Re-run the quality gate whenever chunking, retrieval or the embedding model changes.
 
 ## Observability and evals
@@ -166,6 +168,22 @@ Tests process uploads inline and give each test its own Chroma store and upload 
 - ingestion jobs on the ARQ worker get one trace per job.
 
 Tracing is off when the keys are empty, and a Langfuse outage never fails a request. Set `LANGFUSE_CAPTURE_CONTENT=false` to keep learners' notes and messages out of Langfuse. The code is in [app/core/observability.py](app/core/observability.py).
+
+**deepeval evals.** [tests/evals](tests/evals/test_llm_evals.py) scores real outputs on a textbook whose facts and pages are known, with Gemini as the judge:
+
+| Eval | Metrics (threshold) |
+|------|---------------------|
+| Tutor answers to textbook questions | Faithfulness to the cited pages (0.7), answer relevancy (0.7), correctness against the known fact (G-Eval, 0.6) |
+| AI-built curriculum | Structure: every section used once, reading order, sensible prerequisites, descriptive titles (G-Eval, 0.7) |
+| Generated chapter notes | Faithfulness to the chapter's source pages (0.8), coverage of their key facts (G-Eval, 0.6) |
+
+```bash
+pip install -r requirements-dev.txt
+DEEPEVAL_LIVE=1 pytest tests/evals -s                                   # prints each score and the judge's reasons
+DEEPEVAL_LIVE=1 DEEPEVAL_JUDGE_MODEL=gemini-3.1-pro-preview pytest tests/evals -s   # a stronger judge
+```
+
+The evals call Gemini for every answer and every judgement, so they are not part of the default run. Re-run them when prompts, models or retrieval change. By default the judge is `GEMINI_MODEL`, the same model the app uses; a different, stronger judge avoids the model grading itself.
 
 ## Deployment
 
