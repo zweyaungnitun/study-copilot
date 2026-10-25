@@ -49,13 +49,18 @@ class LocalStorage(FileStorage):
 class S3Storage(FileStorage):
     def __init__(self, bucket: Optional[str] = None, client=None):
         import boto3
+        from botocore.config import Config
         self.bucket = bucket or settings.S3_BUCKET
+        # S3-compatible stores (GCS interoperability, R2, MinIO) reject the newer default checksum headers.
+        config = Config(request_checksum_calculation="when_required", response_checksum_validation="when_required") \
+            if settings.S3_ENDPOINT_URL else None
         self.client = client or boto3.client(
             "s3",
             endpoint_url=settings.S3_ENDPOINT_URL or None,
             region_name=settings.S3_REGION,
             aws_access_key_id=settings.S3_ACCESS_KEY_ID or None,
             aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY or None,
+            config=config,
         )
 
     async def put(self, key: str, src_path: str) -> None:

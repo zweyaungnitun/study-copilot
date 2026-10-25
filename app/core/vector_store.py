@@ -145,7 +145,8 @@ class PgVectorStore(VectorStore):
 
     def __init__(self, url: Optional[str] = None):
         from sqlalchemy.ext.asyncio import create_async_engine
-        self.url = url or settings.PGVECTOR_URL or settings.DATABASE_URL
+        from app.core.config import async_db_url
+        self.url = async_db_url(url or settings.PGVECTOR_URL or settings.DATABASE_URL)
         if not self.url.startswith("postgresql"):
             raise RuntimeError("VECTOR_BACKEND=pgvector needs a PostgreSQL PGVECTOR_URL or DATABASE_URL")
         self.engine = create_async_engine(self.url, pool_pre_ping=True)

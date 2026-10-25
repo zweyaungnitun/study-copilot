@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 import logging
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
-from app.core.config import settings
+from app.core.config import DEV_SECRET_KEY, settings
 from app.core.database import init_db
 from app.core.request_context import RequestContextMiddleware
 
@@ -19,10 +21,14 @@ logger = logging.getLogger("studypilot")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager: initializes database and services on startup."""
+    if settings.is_production and settings.SECRET_KEY == DEV_SECRET_KEY:
+        raise RuntimeError("Set SECRET_KEY: the development key would let anyone forge login tokens.")
     logger.info("Initializing StudyPilot database schema...")
     await init_db()
     from app.services.ingestion_service import migrate_legacy_indexes
     await migrate_legacy_indexes()
+    from app.services import jobs
+    await jobs.resume_interrupted()
     logger.info("StudyPilot services initialized and ready.")
     yield
     logger.info("Shutting down StudyPilot...")
@@ -72,14 +78,28 @@ async def health_check():
     }
 
 
-@app.get("/", tags=["Root"])
-async def root():
-    """Root info endpoint."""
-    return {
-        "message": f"Welcome to {settings.APP_NAME} API",
-        "docs": "/docs",
-        "api_v1": settings.API_V1_STR,
-    }
+static_dir = Path(settings.STATIC_DIR) if settings.STATIC_DIR else None
+if static_dir and (static_dir / "index.html").is_file():
+    # Serve the built frontend; unknown paths fall back to index.html for client-side routing.
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def frontend(path: str):
+        if path.startswith(settings.API_V1_STR.strip("/") + "/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        file = (static_dir / path).resolve()
+        if path and file.is_file() and static_dir.resolve() in file.parents:
+            return FileResponse(file)
+        return FileResponse(static_dir / "index.html")
+else:
+    @app.get("/", tags=["Root"])
+    async def root():
+        """Root info endpoint."""
+        return {
+            "message": f"Welcome to {settings.APP_NAME} API",
+            "docs": "/docs",
+            "api_v1": settings.API_V1_STR,
+        }
 
 
 if __name__ == "__main__":

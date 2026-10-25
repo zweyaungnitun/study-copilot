@@ -88,12 +88,14 @@ Set these in `.env` (see [.env.example](.env.example)):
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
+| `APP_ENV` | `production` refuses to start with the development `SECRET_KEY` | `development` |
 | `SECRET_KEY` | Signs bearer tokens (HMAC). **Change in production.** | dev key |
 | `AUTH_TOKEN_TTL_HOURS` | Bearer token lifetime | `168` |
 | `ADMIN_USERNAMES` | JSON list of usernames promoted to admin on register/login | `[]` |
 | `DEFAULT_MONTHLY_TOKEN_LIMIT` | Monthly LLM tokens per user (0 = unlimited); admins can change it at runtime | `500000` |
 | `PROCTOR_LIVE_WINDOW_SECONDS` | How recent an exam heartbeat must be to count as live | `45` |
-| `DATABASE_URL` | SQLAlchemy URL (SQLite or PostgreSQL) | `sqlite+aiosqlite:///./studypilot.db` |
+| `STATIC_DIR` | Built frontend to serve from the API (the Docker image sets it) | empty |
+| `DATABASE_URL` | SQLAlchemy URL (SQLite or PostgreSQL; libpq URLs with `sslmode`, as Neon gives, are accepted) | `sqlite+aiosqlite:///./studypilot.db` |
 | `GOOGLE_API_KEY` | Gemini API key | none |
 | `GEMINI_MODEL` / `GEMINI_FAST_MODEL` | Main and fast models | `gemini-3.8-flash` / `gemini-3.5-flash-lite` |
 | `GEMINI_EMBED_MODEL` / `EMBED_DIM` | Embedding model for semantic retrieval | `gemini-embedding-001` / `768` |
@@ -140,6 +142,7 @@ Set these in `.env` (see [.env.example](.env.example)):
 ## Testing
 
 ```bash
+pip install -r requirements-dev.txt
 pytest                  # all tests
 pytest tests/unit       # unit only
 pytest tests/e2e        # full student flow
@@ -149,6 +152,29 @@ PGVECTOR_TEST_URL=postgresql+asyncpg://studypilot:studypilot@localhost:5432/pgv_
 ```
 
 Tests process uploads inline and give each test its own Chroma store and upload directory. Re-run the quality gate whenever chunking, retrieval or the embedding model changes.
+
+## Deployment
+
+The [Dockerfile](Dockerfile) builds one image: FastAPI serves the API and the built frontend, so there is no CORS setup. The target is Cloud Run, with managed services that have free tiers:
+
+| Piece | Service | Notes |
+|-------|---------|-------|
+| API + frontend | Cloud Run | `--no-cpu-throttling` so uploads keep processing after the request returns; `--max-instances 1` |
+| Database + vectors | Neon Postgres (free plan) | `VECTOR_BACKEND=pgvector`; pgvector is available on the free plan |
+| Uploaded files | Cloud Storage | through its S3-compatible API with HMAC keys; free tier applies in `us-central1`/`us-east1`/`us-west1` |
+| Secrets | Secret Manager | database URL, `SECRET_KEY`, Gemini key, HMAC keys |
+| LLM | Gemini API | key from Google AI Studio |
+
+Ingestion runs inside the API instance (`INGEST_MODE=background`), so no Redis is needed. Materials left half-processed when an instance stops are resumed on the next startup. To scale past one instance, run Redis and `python -m app.worker` instead.
+
+```bash
+gcloud auth login
+PROJECT_ID=my-project BUCKET=my-project-uploads ./deploy/gcp.sh setup   # once; prompts for the Neon URL and Gemini key
+cp deploy/env.example.yaml deploy/env.yaml                              # set S3_BUCKET and ADMIN_USERNAMES
+PROJECT_ID=my-project ./deploy/gcp.sh deploy                            # prints the service URL
+```
+
+To try the image locally: `docker build -t study-copilot . && docker run -p 8080:8080 --env-file .env -e SECRET_KEY=... study-copilot`.
 
 ## Documentation
 

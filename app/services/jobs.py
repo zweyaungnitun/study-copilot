@@ -56,6 +56,28 @@ async def enqueue_ingest(material_id: str, db: AsyncSession, attempt: int = 0) -
     task.add_done_callback(_tasks.discard)
 
 
+async def resume_interrupted() -> int:
+    """Restart in-process ingestion that a previous instance didn't finish (it was stopped or crashed).
+
+    Only for ``background`` mode, and only safe with a single instance (Cloud Run ``--max-instances 1``):
+    another live instance could still be working on these materials. ARQ retries its own jobs.
+    """
+    if mode() != "background":
+        return 0
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.entities import MaterialUpload
+
+    async with AsyncSessionLocal() as db:
+        ids = (await db.execute(select(MaterialUpload.id).where(
+            MaterialUpload.status.in_(("pending", "extracting", "outlining", "embedding"))))).scalars().all()
+        for material_id in ids:
+            await enqueue_ingest(material_id, db)
+    if ids:
+        logger.info("Resumed %d interrupted ingestion job(s)", len(ids))
+    return len(ids)
+
+
 async def drain(timeout: Optional[float] = None) -> None:
     """Wait for in-process jobs (shutdown, tests)."""
     if _tasks:

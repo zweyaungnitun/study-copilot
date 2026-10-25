@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import declarative_base
 
-from app.core.config import settings
+from app.core.config import async_db_url, settings
 
 # Engine configuration
 connect_args = {}
@@ -14,10 +14,11 @@ if settings.is_sqlite:
     connect_args["check_same_thread"] = False
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    async_db_url(settings.DATABASE_URL),
     echo=settings.DEBUG and settings.APP_ENV == "development",
     future=True,
     connect_args=connect_args if settings.is_sqlite else {},
+    pool_pre_ping=not settings.is_sqlite,  # serverless Postgres (Neon) closes idle connections
 )
 
 if settings.is_sqlite:

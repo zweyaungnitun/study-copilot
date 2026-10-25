@@ -69,3 +69,6 @@ docs/
 # SQLite WAL side files
 *.db-shm
 *.db-wal
+
+# Deployment settings
+deploy/env.yaml

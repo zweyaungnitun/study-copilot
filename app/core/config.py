@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # Built frontend (frontend/dist) to serve from the API, so one container hosts the whole app
+    STATIC_DIR: str = ""
+
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
@@ -84,6 +87,29 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return "sqlite" in self.DATABASE_URL.lower()
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.lower() == "production"
+
+
+DEV_SECRET_KEY = Settings.model_fields["SECRET_KEY"].default
+
+
+def async_db_url(url: str) -> str:
+    """Accept libpq-style Postgres URLs (Neon, Cloud SQL) for asyncpg, which takes ``ssl`` not ``sslmode``."""
+    from sqlalchemy.engine import make_url
+
+    u = make_url(url)
+    if u.drivername in ("postgres", "postgresql", "postgresql+psycopg2"):
+        u = u.set(drivername="postgresql+asyncpg")
+    if u.drivername != "postgresql+asyncpg":
+        return url
+    query = dict(u.query)
+    if "sslmode" in query:
+        query["ssl"] = query.pop("sslmode")
+    query.pop("channel_binding", None)
+    return u.set(query=query).render_as_string(hide_password=False)
 
 
 settings = Settings()
