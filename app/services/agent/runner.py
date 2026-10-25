@@ -16,6 +16,7 @@ from typing import Any, AsyncIterator, Dict, List
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
 
+from app.core import observability as tracing
 from app.core.config import settings
 from app.services.agent import models
 from app.services.agent.middleware import public_step
@@ -49,12 +50,16 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
     finish = None
     transcript: List[BaseMessage] = list(messages)
     emitted = False
+    model_name = settings.GEMINI_AGENT_MODEL or settings.GEMINI_MODEL
+    obs = tracing.start("tutor.agent", as_type="agent", input=tracing.content(messages[-1].content if messages else None),
+                        metadata={"model": model_name, "history": len(messages) - 1})
+    callbacks = tracing.langchain_callbacks(obs)
 
     try:
         async for namespace, mode, data in graph.astream(
             {"messages": messages}, context=context, subgraphs=True,
             stream_mode=["messages", "custom", "updates"],
-            config={"recursion_limit": 4 * settings.AGENT_MAX_STEPS + 20},
+            config={"recursion_limit": 4 * settings.AGENT_MAX_STEPS + 20, "callbacks": callbacks},
         ):
             top = not namespace
             if mode == "messages":
@@ -92,8 +97,9 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
                         if node == "model" and isinstance(m, AIMessage):
                             _usage(m, usage)
                             finish = (m.response_metadata or {}).get("finish_reason", finish)
-    except Exception as e:
-        if not emitted:  # nothing reached the learner yet: let the caller use its offline fallback
+    except BaseException as e:
+        tracing.end(obs, error=f"{type(e).__name__}: {e}")
+        if isinstance(e, Exception) and not emitted:  # nothing reached the learner: caller uses its offline fallback
             logger.exception("Agent run failed before producing output")
             raise AgentUnavailable(str(e)) from e
         raise
@@ -106,7 +112,7 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
         try:
             model = models.chat_model(settings.GEMINI_AGENT_MODEL or None, thinking_budget=0)
             res = await model.ainvoke([SystemMessage(system_prompt or "You are a helpful tutor."),
-                                       *transcript, HumanMessage("Please answer now.")])
+                                       *transcript, HumanMessage("Please answer now.")], config={"callbacks": callbacks})
             final_text = (res.text or "").strip()
         except Exception:
             logger.exception("Forced final answer failed")
@@ -117,5 +123,6 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
     steps = [public_step(s) for s in getattr(context, "steps", [])]
     logger.info("agent done steps=%d tools=%s ms=%d usage=%s", len(steps), [s["tool"] for s in steps],
                 (time.perf_counter() - started) * 1000, usage)
-    await UsageService.record(settings.GEMINI_AGENT_MODEL or settings.GEMINI_MODEL, usage)
+    await UsageService.record(model_name, usage)
+    tracing.end(obs, output=tracing.content(final_text), metadata={"tools": [s["tool"] for s in steps], "usage": usage})
     yield {"type": "final", "text": final_text, "steps": steps, "usage": usage}

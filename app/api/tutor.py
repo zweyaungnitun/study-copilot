@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import observability as tracing
 from app.core.database import get_db
 from app.models.entities import Chapter, MistakeRecord, Note, User, UserProfile
 from app.schemas.tutor import TutorChatRequest, TutorChatResponse
@@ -66,6 +67,7 @@ async def run_turn(request: TutorChatRequest, db: AsyncSession) -> AsyncIterator
     if request.session_id:
         chat = await ChatStore.get_owned(db, request.session_id, request.user_id, "tutor")
         history = await ChatStore.history(db, chat.id, limit=20)
+        tracing.set_session(chat.id)
     chapter = await db.get(Chapter, request.chapter_id) if request.chapter_id else None
     ctx = TutorContext(db=db, user_id=request.user_id, chapter=chapter, profile=await db.get(UserProfile, request.user_id),
                        mode=request.mode, hint_level=request.hint_level)

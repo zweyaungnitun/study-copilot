@@ -16,6 +16,8 @@ langchain-core>=1.6.12
 langgraph>=1.2.16
 langchain-google-genai>=4.4.2
 deepagents>=0.7.28
+# Tracing (optional at runtime: on when LANGFUSE_* keys are set)
+langfuse>=5.0.0
 # Ingestion pipeline
 arq>=0.28.0
 redis>=5.0.0

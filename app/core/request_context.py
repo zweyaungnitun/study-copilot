@@ -19,6 +19,8 @@ class RequestActor:
     quota_checked: bool = False
     over_quota: bool = False
     limit: int = 0
+    trace_id: Optional[str] = None     # Langfuse trace shared by every LLM call in this request
+    session_id: Optional[str] = None   # Langfuse session (e.g. a tutor chat)
 
 
 current_actor: ContextVar[Optional[RequestActor]] = ContextVar("current_actor", default=None)

@@ -9,10 +9,12 @@ import logging
 import random
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 
+from app.core import observability as tracing
 from app.core.config import settings
 from app.services.usage_service import UsageService
 
@@ -194,6 +196,25 @@ class LLMClient:
         tool_mode: str = "AUTO",
     ) -> Optional[LLMResult]:
         """One non-streaming call over a full multi-turn ``contents`` list."""
+        obs = tracing.start("gemini.generate", model=self._resolve(model),
+                            input=tracing.content({"system": system_prompt, "contents": contents, "tools": tools}),
+                            model_parameters={"temperature": temperature, "max_tokens": max_tokens,
+                                              "json_mode": json_mode, "thinking_budget": thinking_budget})
+        try:
+            result = await self._generate(contents, system_prompt, tools, model, temperature, max_tokens,
+                                          json_mode, thinking_budget, tool_mode)
+        except Exception as e:
+            tracing.end(obs, error=f"{type(e).__name__}: {e}")
+            raise
+        if result is None:
+            tracing.end(obs, error=getattr(self, "_last_error", "") or "no response")
+        else:
+            tracing.end(obs, output=tracing.content(result.text or result.function_calls),
+                        usage_details=tracing.usage_details(result.usage), metadata={"finish_reason": result.finish_reason})
+        return result
+
+    async def _generate(self, contents, system_prompt, tools, model, temperature, max_tokens, json_mode,
+                        thinking_budget, tool_mode) -> Optional[LLMResult]:
         model_name = self._resolve(model)
         if self.is_live:
             await UsageService.ensure_quota()
@@ -203,11 +224,11 @@ class LLMClient:
             self._payload(contents, system_prompt, tools, temperature, max_tokens, json_mode, thinking_budget, tool_mode, model_name),
         )
         if data is None and self._learn_thinking(model_name, status, getattr(self, "_last_error", "")):
-            return await self.generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
-                                       json_mode, thinking_budget, tool_mode)
+            return await self._generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
+                                        json_mode, thinking_budget, tool_mode)
         if data is None and self._retire(model_name, status):
-            return await self.generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
-                                       json_mode, thinking_budget, tool_mode)
+            return await self._generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
+                                        json_mode, thinking_budget, tool_mode)
         if not data or not data.get("candidates"):
             if data:
                 logger.warning("Gemini returned no candidates: %s", str(data.get("promptFeedback"))[:200])
@@ -240,6 +261,35 @@ class LLMClient:
             raise RuntimeError("LLM offline")
         await UsageService.ensure_quota()
         model_name = self._resolve(model)
+        obs = tracing.start("gemini.stream", model=model_name,
+                            input=tracing.content({"system": system_prompt, "contents": contents, "tools": tools}),
+                            model_parameters={"temperature": temperature, "max_tokens": max_tokens,
+                                              "thinking_budget": thinking_budget})
+        text: List[str] = []
+        error: Optional[str] = "stream closed early"
+        try:
+            async for chunk in self._stream(contents, system_prompt, tools, model_name, temperature, max_tokens,
+                                            thinking_budget, tool_mode):
+                if "text" in chunk:
+                    if not text and obs is not None:
+                        obs.update(completion_start_time=datetime.now(timezone.utc))
+                    text.append(chunk["text"])
+                if "usage" in chunk:
+                    error = None
+                    tracing.end(obs, output=tracing.content("".join(text)), usage_details=tracing.usage_details(chunk["usage"]),
+                                metadata={"finish_reason": chunk["finish_reason"]})
+                yield chunk
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            raise
+        finally:
+            if error == "stream closed early":  # the caller stopped reading; not a failure
+                tracing.end(obs, level="WARNING", status_message=error, output=tracing.content("".join(text)))
+            elif error:
+                tracing.end(obs, error=error, output=tracing.content("".join(text)))
+
+    async def _stream(self, contents, system_prompt, tools, model_name, temperature, max_tokens, thinking_budget,
+                      tool_mode) -> AsyncIterator[Dict[str, Any]]:
         payload = self._payload(contents, system_prompt, tools, temperature, max_tokens, False, thinking_budget, tool_mode, model_name)
         url = f"{API_ROOT}/models/{model_name}:streamGenerateContent?alt=sse"
         usage: Dict[str, int] = {}
@@ -287,6 +337,17 @@ class LLMClient:
         if not self.is_live or not texts:
             return None
         await UsageService.ensure_quota()
+        obs = tracing.start("gemini.embed", as_type="embedding", model=self.embed_model,
+                            input={"texts": len(texts), "task_type": task_type})
+        out = await self._embed(texts, task_type)
+        if out is None:
+            tracing.end(obs, error=getattr(self, "_last_error", "") or "embedding failed")
+        else:
+            tracing.end(obs, output={"vectors": len(out)},
+                        usage_details={"input": sum(min(len(t), 8000) for t in texts) // 4})
+        return out
+
+    async def _embed(self, texts: List[str], task_type: str) -> Optional[List[List[float]]]:
         out: List[List[float]] = []
         model = f"models/{self.embed_model}"
         for i in range(0, len(texts), 100):

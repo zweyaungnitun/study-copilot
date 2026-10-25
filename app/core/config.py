@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 60.0
     LLM_MAX_RETRIES: int = 3
 
+    # Langfuse tracing: on when both keys are set (Langfuse Cloud or a self-hosted base URL)
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
+    LANGFUSE_CAPTURE_CONTENT: bool = True  # send prompts and outputs; False keeps only metadata and token usage
+    LANGFUSE_SAMPLE_RATE: float = 1.0
+
     # Agent engine
     GEMINI_AGENT_MODEL: str = ""        # tutor agent model; empty = GEMINI_MODEL (e.g. gemini-3.1-pro-preview for depth)
     AGENT_MAX_STEPS: int = 5           # model<->tool round trips per turn

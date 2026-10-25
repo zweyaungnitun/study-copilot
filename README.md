@@ -97,6 +97,9 @@ Set these in `.env` (see [.env.example](.env.example)):
 | `STATIC_DIR` | Built frontend to serve from the API (the Docker image sets it) | empty |
 | `DATABASE_URL` | SQLAlchemy URL (SQLite or PostgreSQL; libpq URLs with `sslmode`, as Neon gives, are accepted) | `sqlite+aiosqlite:///./studypilot.db` |
 | `GOOGLE_API_KEY` | Gemini API key | none |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | Turn on Langfuse tracing (see [Observability](#observability-and-evals)) | empty (off) |
+| `LANGFUSE_BASE_URL` | Langfuse Cloud region or self-hosted URL | `https://cloud.langfuse.com` |
+| `LANGFUSE_CAPTURE_CONTENT` / `LANGFUSE_SAMPLE_RATE` | Send prompts and outputs (false: usage and metadata only); share of traces kept | `true` / `1.0` |
 | `GEMINI_MODEL` / `GEMINI_FAST_MODEL` | Main and fast models | `gemini-3.8-flash` / `gemini-3.5-flash-lite` |
 | `GEMINI_EMBED_MODEL` / `EMBED_DIM` | Embedding model for semantic retrieval | `gemini-embedding-001` / `768` |
 | `GEMINI_AGENT_MODEL` | Tutor agent model; empty uses `GEMINI_MODEL` | empty |
@@ -152,6 +155,17 @@ PGVECTOR_TEST_URL=postgresql+asyncpg://studypilot:studypilot@localhost:5432/pgv_
 ```
 
 Tests process uploads inline and give each test its own Chroma store and upload directory. Re-run the quality gate whenever chunking, retrieval or the embedding model changes.
+
+## Observability and evals
+
+**Langfuse tracing.** Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (a free [Langfuse Cloud](https://cloud.langfuse.com) project, or a self-hosted instance via `LANGFUSE_BASE_URL`) and every LLM call is traced:
+
+- each HTTP request becomes one trace, named after its API area (`tutor`, `chapters`, `roadmap`, `materials`...) and tagged with the signed-in user;
+- Gemini calls are generations with model, parameters, token usage (including thinking tokens) and, for streams, time to first token; embeddings are embedding observations;
+- a tutor turn is an `agent` observation with the LangGraph model and tool calls nested under it, and turns in one saved chat share a Langfuse session;
+- ingestion jobs on the ARQ worker get one trace per job.
+
+Tracing is off when the keys are empty, and a Langfuse outage never fails a request. Set `LANGFUSE_CAPTURE_CONTENT=false` to keep learners' notes and messages out of Langfuse. The code is in [app/core/observability.py](app/core/observability.py).
 
 ## Deployment
 

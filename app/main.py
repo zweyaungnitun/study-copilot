@@ -37,6 +37,8 @@ async def lifespan(app: FastAPI):
     await jobs.drain(timeout=10)
     from app.services.usage_service import UsageService
     await UsageService.drain()
+    from app.core import observability
+    observability.shutdown()
     await jobs.close()
     await llm_client.aclose()
 

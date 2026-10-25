@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ["APP_ENV"] = "testing"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["INGEST_MODE"] = "inline"  # uploads are processed before the request returns
+os.environ["LANGFUSE_PUBLIC_KEY"] = ""  # never send test traces to the Langfuse project in .env
+os.environ["LANGFUSE_SECRET_KEY"] = ""
 
 from app.core.database import Base, get_db
 from app.main import app

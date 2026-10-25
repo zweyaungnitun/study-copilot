@@ -9,6 +9,7 @@ from arq.connections import RedisSettings
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.request_context import RequestActor, current_actor
 
 logger = logging.getLogger("studypilot.worker")
 MAX_TRIES = 3
@@ -17,6 +18,7 @@ MAX_TRIES = 3
 async def ingest_material(ctx, material_id: str) -> str:
     from app.services.ingestion_service import IngestionPipeline
     tries = ctx.get("job_try", 1)
+    current_actor.set(RequestActor(feature="ingestion"))  # one Langfuse trace per job
     try:
         return await IngestionPipeline.run(material_id, final_attempt=tries >= MAX_TRIES)
     except Exception as e:
@@ -33,8 +35,10 @@ async def startup(ctx) -> None:
 
 
 async def shutdown(ctx) -> None:
+    from app.core import observability
     from app.services.llm_client import llm_client
     await llm_client.aclose()
+    observability.shutdown()
 
 
 class WorkerSettings:
