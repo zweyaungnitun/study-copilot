@@ -15,6 +15,7 @@ langchain>=1.4.6
 langchain-core>=1.6.12
 langgraph>=1.2.16
 langchain-google-genai>=4.4.2
+google-auth>=2.40.0  # Vertex AI service-account auth
 deepagents>=0.7.28
 # Tracing (optional at runtime: on when LANGFUSE_* keys are set)
 langfuse>=5.0.0
@@ -29,3 +30,5 @@ pytesseract>=0.3.13
 pillow>=10.0.0
 boto3>=1.36.0
 asyncpg>=0.30.0
+# Transitive (pdfminer.six); 49+ ships no x86_64 macOS wheels, so it builds from source
+cryptography<49

@@ -31,7 +31,12 @@ def chat_model(model: Optional[str] = None, *, temperature: float = 0.5, max_tok
     from langchain_google_genai import ChatGoogleGenerativeAI  # heavy import, only when an agent is built
 
     name = model or settings.GEMINI_MODEL
+    if llm_client.vertex:
+        auth: Dict[str, Any] = {"vertexai": True, "project": llm_client.vertex_project,
+                                "location": settings.GOOGLE_CLOUD_LOCATION, "credentials": llm_client.vertex_credentials()}
+    else:
+        auth = {"google_api_key": llm_client.api_key}
     return ChatGoogleGenerativeAI(
-        model=name, google_api_key=llm_client.api_key, temperature=temperature, max_output_tokens=max_tokens,
+        model=name, **auth, temperature=temperature, max_output_tokens=max_tokens,
         timeout=settings.LLM_TIMEOUT_SECONDS, max_retries=0, **_thinking(name, thinking_budget),
     )

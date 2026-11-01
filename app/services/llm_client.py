@@ -21,6 +21,7 @@ from app.services.usage_service import UsageService
 logger = logging.getLogger("studypilot.llm")
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
+VERTEX_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 RETRY_STATUS = {408, 429, 500, 502, 503, 504}
 
 
@@ -52,22 +53,74 @@ class LLMClient:
         self._client_loop: Optional[asyncio.AbstractEventLoop] = None
         self._retired: set = set()
         self._no_minimal: set = {"gemini-3.8-flash"}  # models that reject thinkingLevel MINIMAL (learned at runtime too)
+        self.vertex = settings.GOOGLE_GENAI_USE_VERTEXAI
+        self._credentials: Any = None
+        self._project = settings.GOOGLE_CLOUD_PROJECT
+        self._token_lock: Optional[asyncio.Lock] = None
 
     @property
     def is_live(self) -> bool:
+        if self.vertex:
+            return True
         return bool(self.api_key) and self.api_key not in ["your_google_api_key_here", "mock-key-for-local-dev"]
+
+    # ------------------------------------------------------------------ vertex auth
+    def vertex_credentials(self) -> Any:
+        """Service-account (or ADC) credentials for Vertex AI, loaded once."""
+        if self._credentials is None:
+            import google.auth
+
+            if settings.GOOGLE_APPLICATION_CREDENTIALS:
+                creds, project = google.auth.load_credentials_from_file(
+                    settings.GOOGLE_APPLICATION_CREDENTIALS, scopes=[VERTEX_SCOPE])
+            else:
+                creds, project = google.auth.default(scopes=[VERTEX_SCOPE])
+            self._credentials = creds
+            self._project = self._project or project or ""
+            if not self._project:
+                raise RuntimeError("Vertex AI needs GOOGLE_CLOUD_PROJECT (not found in the credentials)")
+        return self._credentials
+
+    @property
+    def vertex_project(self) -> str:
+        self.vertex_credentials()
+        return self._project
+
+    async def _auth_headers(self) -> Dict[str, str]:
+        """API-key mode sends the key on the client; Vertex sends a short-lived OAuth token, refreshed here."""
+        if not self.vertex:
+            return {}
+        if self._token_lock is None:
+            self._token_lock = asyncio.Lock()
+        async with self._token_lock:
+            creds = self.vertex_credentials()
+            if not creds.valid:
+                from google.auth.transport.requests import Request
+                await asyncio.to_thread(creds.refresh, Request())
+        return {"authorization": f"Bearer {creds.token}"}
+
+    def _url(self, path: str) -> str:
+        if not self.vertex:
+            return f"{API_ROOT}/{path}"
+        loc = settings.GOOGLE_CLOUD_LOCATION
+        host = "aiplatform.googleapis.com" if loc == "global" else f"{loc}-aiplatform.googleapis.com"
+        return f"https://{host}/v1beta1/projects/{self.vertex_project}/locations/{loc}/publishers/google/{path}"
 
     # ------------------------------------------------------------------ transport
     def _http(self) -> httpx.AsyncClient:
         """Shared connection pool, recreated if the event loop changed (tests, reloads)."""
         loop = asyncio.get_running_loop()
         if self._client is None or self._client.is_closed or self._client_loop is not loop:
+            headers = {"content-type": "application/json"}
+            if not self.vertex:
+                headers["x-goog-api-key"] = self.api_key
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(settings.LLM_TIMEOUT_SECONDS, connect=10.0),
                 limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-                headers={"x-goog-api-key": self.api_key, "content-type": "application/json"},
+                headers=headers,
             )
             self._client_loop = loop
+            self._token_lock = None  # asyncio locks are bound to their loop
         return self._client
 
     async def aclose(self) -> None:
@@ -93,7 +146,7 @@ class LLMClient:
             return None, 0
         for attempt in range(settings.LLM_MAX_RETRIES + 1):
             try:
-                resp = await self._http().post(f"{API_ROOT}/{path}", json=payload)
+                resp = await self._http().post(self._url(path), json=payload, headers=await self._auth_headers())
                 if resp.status_code in RETRY_STATUS and attempt < settings.LLM_MAX_RETRIES:
                     delay = self._backoff(attempt, resp.headers.get("retry-after"))
                     logger.warning("Gemini %s -> %s, retrying in %.1fs", path, resp.status_code, delay)
@@ -291,12 +344,12 @@ class LLMClient:
     async def _stream(self, contents, system_prompt, tools, model_name, temperature, max_tokens, thinking_budget,
                       tool_mode) -> AsyncIterator[Dict[str, Any]]:
         payload = self._payload(contents, system_prompt, tools, temperature, max_tokens, False, thinking_budget, tool_mode, model_name)
-        url = f"{API_ROOT}/models/{model_name}:streamGenerateContent?alt=sse"
+        url = self._url(f"models/{model_name}:streamGenerateContent?alt=sse")
         usage: Dict[str, int] = {}
         finish: Optional[str] = None
         for attempt in range(settings.LLM_MAX_RETRIES + 1):
             try:
-                async with self._http().stream("POST", url, json=payload) as resp:
+                async with self._http().stream("POST", url, json=payload, headers=await self._auth_headers()) as resp:
                     if resp.status_code in RETRY_STATUS and attempt < settings.LLM_MAX_RETRIES:
                         await resp.aread()
                         await asyncio.sleep(self._backoff(attempt, resp.headers.get("retry-after")))
@@ -348,6 +401,8 @@ class LLMClient:
         return out
 
     async def _embed(self, texts: List[str], task_type: str) -> Optional[List[List[float]]]:
+        if self.vertex:
+            return await self._embed_vertex(texts, task_type)
         out: List[List[float]] = []
         model = f"models/{self.embed_model}"
         for i in range(0, len(texts), 100):
@@ -361,6 +416,25 @@ class LLMClient:
                 return None
             out.extend(e.get("values", []) for e in data["embeddings"])
         # The embeddings API reports no usage; estimate ~4 characters per token.
+        await UsageService.record(self.embed_model, {"input": sum(min(len(t), 8000) for t in texts) // 4})
+        return out
+
+    async def _embed_vertex(self, texts: List[str], task_type: str) -> Optional[List[List[float]]]:
+        """Vertex serves gemini-embedding-001 via ``:predict`` with one text per request, so fan out a few at a time."""
+        path = f"models/{self.embed_model}:predict"
+
+        async def one(t: str) -> Optional[List[float]]:
+            data = await self._post(path, {"instances": [{"content": t[:8000], "task_type": task_type}],
+                                           "parameters": {"outputDimensionality": settings.EMBED_DIM}})
+            preds = (data or {}).get("predictions") or []
+            return preds[0].get("embeddings", {}).get("values") if preds else None
+
+        out: List[List[float]] = []
+        for i in range(0, len(texts), 8):
+            vecs = await asyncio.gather(*(one(t) for t in texts[i:i + 8]))
+            if any(v is None for v in vecs):
+                return None
+            out.extend(vecs)
         await UsageService.record(self.embed_model, {"input": sum(min(len(t), 8000) for t in texts) // 4})
         return out
 

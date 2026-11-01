@@ -95,6 +95,7 @@ def offline_llm(monkeypatch):
     """Force the deterministic offline paths (no Gemini calls) regardless of .env."""
     from app.services.llm_client import llm_client
     monkeypatch.setattr(llm_client, "api_key", "")
+    monkeypatch.setattr(llm_client, "vertex", False)
 
 
 async def register(client, username: str) -> dict:

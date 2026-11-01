@@ -47,6 +47,11 @@ class Settings(BaseSettings):
 
     # AI / LLM Configuration
     GOOGLE_API_KEY: str = ""
+    # Vertex AI: call Gemini through a GCP project with a service account instead of an API key
+    GOOGLE_GENAI_USE_VERTEXAI: bool = False
+    GOOGLE_CLOUD_PROJECT: str = ""          # empty = the project of the service account / ADC
+    GOOGLE_CLOUD_LOCATION: str = "global"   # Gemini 3.x models are served from "global"
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""  # service-account JSON path; empty = ADC (gcloud login, Cloud Run SA)
     GEMINI_MODEL: str = "gemini-3.8-flash"
     GEMINI_FAST_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_EMBED_MODEL: str = "gemini-embedding-001"

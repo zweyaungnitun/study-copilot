@@ -43,6 +43,7 @@ def fake_gemini(monkeypatch):
     async def noop(*a, **k):
         return None
     monkeypatch.setattr(llm_client, "api_key", "fake-key")
+    monkeypatch.setattr(llm_client, "vertex", False)
     monkeypatch.setattr(UsageService, "ensure_quota", noop)
     monkeypatch.setattr(UsageService, "record", noop)
 
