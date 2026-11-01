@@ -2611,6 +2611,8 @@ button {
 button:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--primary-hover); }
 button:active:not(:disabled) { transform: scale(0.985); box-shadow: none; }
 button:disabled { opacity: 0.4; }
+button svg, .badge svg { flex: none; }  /* icons keep their size when a row squeezes the button */
+.row > button { flex: none; }
 button.ghost { background: transparent; color: var(--text); border-color: var(--line-strong); box-shadow: none; }
 button.ghost:hover:not(:disabled) { background: var(--hover); border-color: var(--line-strong); box-shadow: none; }
 button.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: var(--r-sm); }
