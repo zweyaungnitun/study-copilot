@@ -55,6 +55,25 @@ async def ready_materials(db: AsyncSession, user_id: str, ids: Optional[Sequence
     return list((await db.execute(stmt.order_by(MaterialUpload.created_at))).scalars().all())
 
 
+def page_url(page_urls: Optional[List[str]], page: Optional[int]) -> Optional[str]:
+    """The web page that extracted page ``page`` came from (web sources only)."""
+    if not page_urls:
+        return None
+    return page_urls[min(max(int(page or 1), 1), len(page_urls)) - 1]
+
+
+async def attach_urls(db: AsyncSession, citations: List[dict]) -> None:
+    """Give citations of web sources the URL of the exact page they quote."""
+    ids = {c.get("material_id") for c in citations if c.get("material_id")}
+    if not ids:
+        return
+    urls = dict((await db.execute(select(MaterialUpload.id, MaterialUpload.page_urls)
+                                  .where(MaterialUpload.id.in_(ids), MaterialUpload.source_url.is_not(None)))).all())
+    for c in citations:
+        if c.get("material_id") in urls:
+            c["url"] = page_url(urls[c["material_id"]], c.get("page"))
+
+
 async def unplanned_materials(db: AsyncSession, user_id: str) -> List[MaterialUpload]:
     """Ready textbooks and notes no active track uses yet. Past papers are practice, not plan content."""
     planned = await planned_material_ids(db, user_id)

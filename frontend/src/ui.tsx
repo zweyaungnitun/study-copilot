@@ -45,6 +45,8 @@ const PATHS = {
   exam: 'M9 4h6v3H9zM7 5H5v16h14V5h-2M8 12l2 2 4-4M8 17h8',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
   layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+  globe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM3.5 9h17M3.5 15h17M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9s1.2-6.4 3.6-9z',
+  link: 'M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1',
   wand: 'M15 4V2M15 10V8M11 6h-2M21 6h-2M17.8 3.2l-1.4 1.4M17.8 8.8l-1.4-1.4M3 21l11-11',
 } as const
 export type IconName = keyof typeof PATHS

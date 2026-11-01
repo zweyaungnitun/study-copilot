@@ -2850,6 +2850,17 @@ sup.cite { font-family: var(--font-sans); font-weight: 600; background: var(--su
   background-color: var(--surface-2); background-position: right 4px center; background-size: 12px;
 }
 
+/* "or" separator between two ways of doing the same thing */
+.or-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 12px; color: var(--muted); font-size: 12.5px; }
+.or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+/* Checkbox + text on one line (forms) */
+label.check-row { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0 0; font-weight: 450; color: var(--text-2); cursor: pointer; }
+label.check-row input { width: 16px; height: 16px; margin-top: 3px; }
+a.t-source { text-decoration: none; cursor: pointer; }
+a.t-source:hover { border-color: var(--line-strong); color: var(--text); opacity: 1; }
+a.t-source svg { color: var(--muted); }
+
 /* ---------- Misc ---------- */
 .admin-badge { background: var(--surface-2); color: var(--text-2); }
 .skeleton, .shimmer { background-image: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); }

@@ -104,7 +104,7 @@ def _read_text(path: str, kind: str) -> str:
     return "\n\n".join(parts)
 
 
-def _pseudo_pages(text: str) -> List[Page]:
+def pseudo_pages(text: str) -> List[Page]:
     """Split on paragraph boundaries into ~PSEUDO_PAGE_CHARS pages, keeping lines for heading detection."""
     pages: List[Page] = []
     buf: List[str] = []
@@ -185,7 +185,7 @@ def extract(path: str, filename: str, kind: Optional[str] = None) -> Extracted:
         return extract_pdf(path)
     if kind == "image":
         return Extracted("image", [Page(1, "", [], scanned=True)])
-    return Extracted(kind, _pseudo_pages(_read_text(path, kind)))
+    return Extracted(kind, pseudo_pages(_read_text(path, kind)))
 
 
 # ---------------------------------------------------------------------------- OCR

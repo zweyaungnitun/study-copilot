@@ -94,6 +94,7 @@ async def list_library(runtime: Runtime) -> Result:
     out = []
     for m in mats:
         item: Dict[str, Any] = {"ref": ref(m.id), "filename": m.filename, "type": m.source_type or "textbook",
+                                **({"website": m.source_url} if m.source_url else {}),
                                 "pages": m.page_count or 0, "status": "ready" if m.status in library.READY else m.status}
         if m.status in library.READY:
             secs = [s.title for s in tops if s.material_id == m.id]

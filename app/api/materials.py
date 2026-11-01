@@ -5,6 +5,7 @@ import tempfile
 import time
 import uuid
 from typing import List, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import delete, select
@@ -16,6 +17,7 @@ from app.core.deps import get_current_user
 from app.core.rag_store import rag_store
 from app.models.entities import ChapterSource, MaterialSection, MaterialUpload, User
 from app.schemas.material import (
+    MaterialFromUrl,
     MaterialOutline,
     MaterialUpdate,
     MaterialUploadResponse,
@@ -23,7 +25,7 @@ from app.schemas.material import (
     RAGQueryResponse,
     StorageStatus,
 )
-from app.services import extraction, jobs, library
+from app.services import extraction, jobs, library, web_source
 from app.services.rag_service import RAGService
 from app.services.storage import get_storage
 from app.services.storage_quota import StorageQuota
@@ -122,6 +124,40 @@ async def upload_material(
         id=material_id, user_id=user.id, filename=filename, file_path=key,
         file_type=file.content_type or kind, source_type=library.normalize_source_type(source_type, filename),
         file_size_bytes=size, sha256=sha, page_count=pages, status="pending",
+    )
+    db.add(material)
+    await db.flush()
+    await jobs.enqueue_ingest(material.id, db)
+    await db.refresh(material)
+    return material
+
+
+@router.post("/from-url", response_model=MaterialUploadResponse, status_code=status.HTTP_202_ACCEPTED)
+async def add_web_source(request: MaterialFromUrl, response: Response, user: User = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db)):
+    """Add a web page, a docs section (with ``include_linked_pages``), a public Google Doc or a GitHub file.
+
+    Processed like an upload (202, poll ``GET /materials/{id}``): the pages are fetched, turned into Markdown
+    and outlined, one section per web page. Re-indexing fetches them again. Adding the same link again
+    returns the existing material (200, ``duplicate: true``).
+    """
+    try:
+        url = web_source.normalize_url(request.url)
+    except web_source.WebSourceError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    crawl = request.max_pages if request.include_linked_pages else 1
+    dup = (await db.execute(select(MaterialUpload).where(
+        MaterialUpload.user_id == user.id, MaterialUpload.source_url == url, MaterialUpload.status != "failed"))).scalars().first()
+    if dup:
+        response.status_code = status.HTTP_200_OK
+        return MaterialUploadResponse.model_validate(dup).model_copy(update={"duplicate": True})
+    material_id = str(uuid.uuid4())
+    name = (web_source.host_of(url) + urlsplit(url).path.rstrip("/"))[:255]
+    material = MaterialUpload(
+        id=material_id, user_id=user.id, filename=name, file_path=f"{user.id}/{material_id}.md", file_type="text/html",
+        # A URL says little about the content ("/tutorial/" is not an exam), so web sources start as textbooks.
+        source_type=request.source_type or "textbook", source_url=url, crawl_pages=crawl,
+        file_size_bytes=0, page_count=0, status="pending",
     )
     db.add(material)
     await db.flush()

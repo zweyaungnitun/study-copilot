@@ -48,7 +48,7 @@ const qs = (o: Record<string, string | number | boolean | undefined>) =>
 
 export interface Chapter { id: string; title: string; estimated_hours: number; status: string; mastery_score: number; prerequisites: string[] }
 export interface ChapterRef { id: string; title: string; status: string }
-export interface ChapterSource { section_id: string; material_id: string; filename: string; title: string; page_start: number; page_end: number }
+export interface ChapterSource { section_id: string; material_id: string; filename: string; title: string; page_start: number; page_end: number; url?: string | null }
 export interface ChapterDetail { id: string; roadmap_id: string; roadmap_name: string; title: string; subject_name: string; estimated_hours: number; status: string; mastery_score: number; prerequisites: ChapterRef[]; next_chapter: ChapterRef | null; sources?: ChapterSource[] }
 export interface ChapterComplete { chapter: ChapterDetail; unlocked: { id: string; title: string }[] }
 export interface TutorTurn { role: 'user' | 'tutor'; content: string }
@@ -67,7 +67,7 @@ export interface Note { chapter_id: string; simple_content: string; detailed_con
 export interface Task { id: string; type: string; title: string; estimated_minutes: number; chapter_id?: string }
 export interface SessionStart { session_id: string; energy_level: string; tasks: Task[] }
 export interface SessionEnd { streak_updated: number; xp_earned: number; message: string }
-export interface Citation { n: number; filename: string; page: number; snippet: string }
+export interface Citation { n: number; filename: string; page: number; snippet: string; url?: string | null }
 export interface AgentStep { tool: string; label: string; status: 'running' | 'done' | 'error' | string; summary: string }
 export interface TutorReply { session_id?: string; message_id?: string; reply: string; source: string; hint_level: number; detected_misconception?: string; follow_up_question?: string; suggestions?: string[]; citations?: Citation[]; steps?: AgentStep[]; agent?: boolean }
 export type TutorEvent =
@@ -116,7 +116,7 @@ export interface BrainMap { nodes: BrainNode[]; edges: { source: string; target:
 export type MaterialStatus = 'pending' | 'extracting' | 'outlining' | 'embedding' | 'ready' | 'failed'
 export type SourceType = 'textbook' | 'past_paper' | 'notes' | 'other'
 export const SOURCE_LABEL: Record<SourceType, string> = { textbook: 'Textbook', past_paper: 'Past paper', notes: 'Notes', other: 'Other' }
-export interface Material { id: string; user_id: string; filename: string; file_type: string; source_type: SourceType; in_plan?: boolean | null; file_size_bytes: number; chunk_count: number; status: MaterialStatus; progress: number; page_count: number; ocr_pages: number; outline_source?: string | null; error?: string | null; created_at: string; processed_at?: string | null; duplicate?: boolean }
+export interface Material { id: string; user_id: string; filename: string; file_type: string; source_type: SourceType; in_plan?: boolean | null; source_url?: string | null; crawl_pages?: number; web_pages?: number; file_size_bytes: number; chunk_count: number; status: MaterialStatus; progress: number; page_count: number; ocr_pages: number; outline_source?: string | null; error?: string | null; created_at: string; processed_at?: string | null; duplicate?: boolean }
 export const PROCESSING: MaterialStatus[] = ['pending', 'extracting', 'outlining', 'embedding']
 export interface Section { id: string; parent_id?: string | null; level: number; order: number; title: string; page_start: number; page_end: number; word_count: number; summary?: string | null; key_concepts: string[] }
 export interface Storage { pages_used: number; page_limit: number; unlimited: boolean; custom_limit: boolean }
@@ -220,6 +220,8 @@ export const api = {
     if (source_type) f.append('source_type', source_type)
     return request<Material>('/materials/upload', { method: 'POST', body: f })
   },
+  addWebSource: (b: { url: string; include_linked_pages: boolean; max_pages?: number; source_type?: SourceType }) =>
+    post<Material>('/materials/from-url', b),
   setMaterialType: (id: string, source_type: SourceType) => patch<Material>(`/materials/${id}`, { source_type }),
   deleteMaterial: (id: string) => request<void>(`/materials/${id}`, { method: 'DELETE' }),
   reindexMaterial: (id: string) => post<Material>(`/materials/${id}/reindex`),

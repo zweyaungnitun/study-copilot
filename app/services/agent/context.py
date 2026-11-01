@@ -37,7 +37,7 @@ class AgentContext:
         existing = next((c for c in self.citations if c["chunk_id"] == match["chunk_id"]), None)
         if not existing:
             existing = {"n": len(self.citations) + 1, "chunk_id": match["chunk_id"], "filename": match["filename"],
-                        "page": match["page_number"], "snippet": match["text"][:220]}
+                        "page": match["page_number"], "snippet": match["text"][:220], "material_id": match.get("material_id")}
             self.citations.append(existing)
         return existing
 

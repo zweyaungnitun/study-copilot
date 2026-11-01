@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Chapter, ChapterSource, MaterialSection, MaterialUpload, Roadmap, Subject
+from app.services.library import page_url
 from app.services.rag_service import UNTRUSTED_NOTICE, RAGService, fence
 
 
@@ -17,7 +18,7 @@ async def chapter_owner(db: AsyncSession, chapter: Chapter) -> Optional[str]:
 async def chapter_sources(db: AsyncSession, chapter_id: str) -> List[Dict[str, Any]]:
     """Linked sections with their material's filename, in reading order."""
     rows = (await db.execute(
-        select(ChapterSource, MaterialSection, MaterialUpload.filename)
+        select(ChapterSource, MaterialSection, MaterialUpload.filename, MaterialUpload.page_urls)
         .join(MaterialSection, MaterialSection.id == ChapterSource.section_id)
         .join(MaterialUpload, MaterialUpload.id == ChapterSource.material_id)
         .where(ChapterSource.chapter_id == chapter_id)
@@ -25,7 +26,8 @@ async def chapter_sources(db: AsyncSession, chapter_id: str) -> List[Dict[str, A
     )).all()
     return [{"section_id": s.id, "material_id": src.material_id, "filename": fn, "title": s.title,
              "page_start": src.page_start or s.page_start, "page_end": src.page_end or s.page_end,
-             "summary": s.summary or ""} for src, s, fn in rows]
+             "url": page_url(urls, src.page_start or s.page_start),
+             "summary": s.summary or ""} for src, s, fn, urls in rows]
 
 
 def reading_list(sources: List[Dict[str, Any]]) -> str:

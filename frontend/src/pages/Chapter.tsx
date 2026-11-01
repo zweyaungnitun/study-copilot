@@ -114,7 +114,9 @@ export default function ChapterPage() {
           {finished ? <button className="ghost" onClick={reopen} disabled={!!busy}>{busy === 'reopen' ? <Spinner /> : <Icon name="refresh" size={16} />}Reopen</button> : <button onClick={complete} disabled={!!busy}>{busy === 'done' ? <Spinner /> : <Icon name="check" size={16} />}Mark complete</button>}</>} />
       {!!c.sources?.length && <div className="card chapter-sources">
         <div className="card-head"><h2><Icon name="book" size={16} /> Read in your materials</h2></div>
-        <ul>{c.sources.map(src => <li key={src.section_id}><b>{src.title}</b> <span className="muted">· {src.filename}, p. {src.page_start}{src.page_end > src.page_start && `–${src.page_end}`}</span></li>)}</ul>
+        <ul>{c.sources.map(src => <li key={src.section_id}>{src.url
+          ? <><a href={src.url} target="_blank" rel="noreferrer noopener"><b>{src.title}</b></a> <span className="muted">· {src.filename}</span></>
+          : <><b>{src.title}</b> <span className="muted">· {src.filename}, p. {src.page_start}{src.page_end > src.page_start && `–${src.page_end}`}</span></>}</li>)}</ul>
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>Notes, exams and the tutor use these pages first.</p>
       </div>}
       {guide.loading ? <div className="card"><Skeleton lines={4} /></div>

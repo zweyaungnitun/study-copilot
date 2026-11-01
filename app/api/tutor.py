@@ -15,6 +15,7 @@ from app.schemas.tutor import TutorChatRequest, TutorChatResponse
 from app.services.agent import AgentUnavailable, TutorContext, run_agent
 from app.services.agent.context import utcnow
 from app.services.agent.tutor_agent import build_system_prompt, build_tutor_graph, next_steps, to_messages
+from app.services import library
 from app.services.chat_store import ChatStore
 from app.services.llm_client import llm_client
 from app.services.rag_service import RAGService
@@ -40,7 +41,7 @@ async def _fallback_turn(ctx: TutorContext, request: TutorChatRequest, history) 
         ctx.used_notes = True
         for i, m in enumerate(rag["matches"], 1):
             ctx.citations.append({"n": i, "chunk_id": m["chunk_id"], "filename": m["filename"],
-                                  "page": m["page_number"], "snippet": m["text"][:220]})
+                                  "page": m["page_number"], "snippet": m["text"][:220], "material_id": m.get("material_id")})
     data = await TutorService.generate_response(
         user_message=request.message, chapter_title=ctx.chapter.title if ctx.chapter else None,
         notes_context=note_content, hint_level=request.hint_level, mode=request.mode,
@@ -93,8 +94,9 @@ async def run_turn(request: TutorChatRequest, db: AsyncSession) -> AsyncIterator
         extras = await next_steps(request.message, reply, request.mode) if llm_client.is_live else {"follow_up_question": None, "suggestions": []}
 
     source = NOTES_BADGE if ctx.used_notes else GENERAL_BADGE
-    citations = [{k: c[k] for k in ("n", "filename", "page", "snippet")} for c in ctx.citations
-                 if f"[{c['n']}]" in reply] or ([] if used_agent else [{k: c[k] for k in ("n", "filename", "page", "snippet")} for c in ctx.citations])
+    await library.attach_urls(db, ctx.citations)
+    public = [{k: c.get(k) for k in ("n", "filename", "page", "snippet", "url")} for c in ctx.citations]
+    citations = [c for c in public if f"[{c['n']}]" in reply] or ([] if used_agent else public)
     response: Dict[str, Any] = {
         "reply": reply, "source": source, "hint_level": request.hint_level,
         "detected_misconception": "; ".join(ctx.misconceptions) or None,

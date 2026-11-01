@@ -181,6 +181,16 @@ class MaterialUpload(Base):
     file_path = Column(String(512), nullable=False)  # storage key (local path or object key)
     file_type = Column(String(50), nullable=False)
     source_type = Column(String(20), default="textbook")  # textbook, past_paper, notes, other
+    # Web sources: fetched (and re-fetched on re-index) instead of uploaded. ``crawl_pages`` > 1 follows links
+    # within the same docs section; ``page_urls[i]`` is the web page that extracted page i + 1 came from.
+    source_url = Column(String(2048), nullable=True)
+    crawl_pages = Column(Integer, default=1)
+    page_urls = Column(JSON, nullable=True)
+
+    @property
+    def web_pages(self) -> int:
+        """Distinct web pages a web source was built from (0 for uploads)."""
+        return len(dict.fromkeys(self.page_urls or []))
     file_size_bytes = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
     # pending -> extracting -> outlining -> embedding -> ready | failed

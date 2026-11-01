@@ -8,7 +8,9 @@ links survive a re-index.
 import asyncio
 import hashlib
 import logging
+import os
 import re
+import tempfile
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -21,9 +23,10 @@ from app.core.database import AsyncSessionLocal
 from app.core.rag_store import rag_store
 from app.core.request_context import RequestActor, current_actor
 from app.models.entities import ChapterSource, MaterialSection, MaterialUpload, User, utcnow
-from app.services import extraction
+from app.services import extraction, web_source
 from app.services.outline_service import Outline, build_outline, estimate_summary_tokens, summarize
 from app.services.storage import get_storage
+from app.services.storage_quota import StorageQuota
 from app.services.usage_service import UsageService
 
 logger = logging.getLogger("studypilot.ingestion")
@@ -176,11 +179,14 @@ class IngestionPipeline:
     @classmethod
     async def _process(cls, db: AsyncSession, m: MaterialUpload, user: User, own: bool) -> None:
         await cls._stage(db, m, "extracting", 5, own)
-        async with get_storage().local_copy(m.file_path) as path:
-            kind = await asyncio.to_thread(extraction.detect_kind, path, m.filename)
-            ex = await asyncio.to_thread(extraction.extract, path, m.filename, kind)
-            m.page_count = len(ex.pages)
-            await cls._ocr(db, m, user, ex, path, kind, own)
+        if m.source_url:
+            ex = await cls._fetch_web(db, m, user, own)
+        else:
+            async with get_storage().local_copy(m.file_path) as path:
+                kind = await asyncio.to_thread(extraction.detect_kind, path, m.filename)
+                ex = await asyncio.to_thread(extraction.extract, path, m.filename, kind)
+                m.page_count = len(ex.pages)
+                await cls._ocr(db, m, user, ex, path, kind, own)
         if not any(p.text.strip() for p in ex.pages):
             raise IngestionError("No readable text found. If this is a scan, OCR could not read it.")
 
@@ -203,6 +209,34 @@ class IngestionPipeline:
                 await db.commit()
         m.chunk_count = len(chunks)
         m.embed_model = settings.GEMINI_EMBED_MODEL
+
+    @classmethod
+    async def _fetch_web(cls, db: AsyncSession, m: MaterialUpload, user: User, own: bool) -> extraction.Extracted:
+        """(Re)fetch a web source as Markdown pages: each web page becomes a top-level section, split into
+        pseudo-pages that remember their URL. A snapshot is kept in storage like an uploaded file."""
+        try:
+            pages = await web_source.collect(m.source_url, include_linked=(m.crawl_pages or 1) > 1,
+                                             max_pages=m.crawl_pages or 1)
+        except web_source.WebSourceError as e:
+            raise IngestionError(str(e))
+        ex_pages: List[extraction.Page] = []
+        urls: List[str] = []
+        for wp in pages:
+            for p in extraction.pseudo_pages(web_source.as_section(wp)):
+                ex_pages.append(extraction.Page(len(ex_pages) + 1, p.text, p.lines))
+                urls.append(wp.url)
+        m.page_count = 0  # a refresh replaces this material's pages, so don't count the old ones
+        await StorageQuota.check(db, user, len(ex_pages))
+        m.page_count, m.page_urls = len(ex_pages), urls
+        m.filename = web_source.site_name(pages)
+        fd, tmp = tempfile.mkstemp(suffix=".md")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("\n\n".join(p.text for p in ex_pages))
+            await get_storage().put(m.file_path, tmp)
+        finally:
+            os.remove(tmp)
+        return extraction.Extracted("markdown", ex_pages)
 
     @classmethod
     async def _ocr(cls, db, m, user, ex, path, kind, own) -> None:

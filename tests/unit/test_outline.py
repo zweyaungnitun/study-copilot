@@ -47,9 +47,9 @@ def test_headings_detected_from_font_sizes_without_bookmarks(tmp_path, offline):
 
 
 def test_markdown_headings_and_code_fences(offline):
-    from app.services.extraction import _pseudo_pages, Extracted
+    from app.services.extraction import pseudo_pages, Extracted
     text = "# Algebra\nIntro words here.\n## Linear equations\nSolve for x.\n```\n# not a heading\n```\n## Quadratics\nUse the formula."
-    o = asyncio.run(build_outline(Extracted("markdown", _pseudo_pages(text)), "notes.md"))
+    o = asyncio.run(build_outline(Extracted("markdown", pseudo_pages(text)), "notes.md"))
     assert o.source == "markdown"
     assert [(s.title, s.level) for s in o.sections] == [("Algebra", 1), ("Linear equations", 2), ("Quadratics", 2)]
 
@@ -63,10 +63,10 @@ def test_outline_without_structure_falls_back_to_page_windows(offline):
 
 
 def test_outline_is_capped(monkeypatch, offline):
-    from app.services.extraction import _pseudo_pages, Extracted
+    from app.services.extraction import pseudo_pages, Extracted
     monkeypatch.setattr(settings, "MAX_OUTLINE_SECTIONS", 5)
     text = "\n".join(f"# Part {i}\ntext {i}\n## Detail {i}a\nmore\n## Detail {i}b\nmore" for i in range(4))
-    o = asyncio.run(build_outline(Extracted("markdown", _pseudo_pages(text)), "n.md"))
+    o = asyncio.run(build_outline(Extracted("markdown", pseudo_pages(text)), "n.md"))
     assert len(o.sections) == 4 and all(s.level == 1 for s in o.sections)
     assert sum(s.word_count for s in o.sections) == sum(len(g.text.split()) for g in o.segments)
 

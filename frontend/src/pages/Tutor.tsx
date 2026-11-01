@@ -100,7 +100,9 @@ function Bubble({ m, onAsk }: { m: Msg; onAsk: (s: string) => void }) {
         {m.stopped && <p className="t-stopped">Stopped</p>}
         {!m.streaming && !!m.citations?.length && <div className="t-sources">
           <span className="t-sources-label">Sources</span>
-          {m.citations.map(c => <span key={c.n} className="t-source" title={c.snippet}><b>{c.n}</b>{c.filename}<em>p.{c.page}</em></span>)}
+          {m.citations.map(c => c.url
+            ? <a key={c.n} className="t-source" href={c.url} target="_blank" rel="noreferrer noopener" title={c.snippet}><b>{c.n}</b>{c.filename}<Icon name="link" size={11} /></a>
+            : <span key={c.n} className="t-source" title={c.snippet}><b>{c.n}</b>{c.filename}<em>p.{c.page}</em></span>)}
         </div>}
         {!m.streaming && m.warn && <div className="t-warn"><Icon name="alert" size={14} /><span><b>Possible misconception:</b> {m.warn}</span></div>}
         {!m.streaming && m.followUp && <button className="t-followup" onClick={() => onAsk(m.followUp!)}>

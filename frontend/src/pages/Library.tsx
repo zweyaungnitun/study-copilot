@@ -56,6 +56,18 @@ export default function Library() {
     return () => window.clearInterval(t)
   }, [processing, refresh])
 
+  const [link, setLink] = useState('')
+  const [crawl, setCrawl] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const addLink = async (e: FormEvent) => {
+    e.preventDefault(); setAdding(true)
+    try {
+      const m = await api.addWebSource({ url: link, include_linked_pages: crawl })
+      toast('ok', m.duplicate ? 'That link is already in your library' : 'Link added — reading the pages')
+      setLink(''); await refresh()
+    } catch (x) { toast('err', (x as Error).message) } finally { setAdding(false) }
+  }
+
   const upload = async (files: FileList | null) => {
     if (!files?.length) return
     setBusy(files.length)
@@ -93,7 +105,7 @@ export default function Library() {
 
   return (
     <>
-      <PageHeader title="Library" sub="Your textbooks and notebooks. Upload them, search them, and turn them into a study track."
+      <PageHeader title="Library" sub="Your textbooks, notes, past papers and web docs. Add them, search them, and turn them into a study track."
         actions={<button disabled={!picked.length} onClick={() => navigate(`/tracks/from-materials?ids=${picked.join(',')}`)}>
           <Icon name="wand" size={16} />Build a track{picked.length ? ` from ${picked.length}` : ''}</button>} />
       {err && <ErrorBox>{err}</ErrorBox>}
@@ -112,15 +124,16 @@ export default function Library() {
                       <div className="main">
                         <input type="checkbox" aria-label={`Use ${m.filename} for a track`} checked={picked.includes(m.id)}
                           disabled={m.status !== 'ready'} onChange={() => toggle(m.id)} />
-                        <span className="file-ic"><Icon name="file" size={16} /></span>
+                        <span className="file-ic"><Icon name={m.source_url ? 'globe' : 'file'} size={16} /></span>
                         <div style={{ minWidth: 0 }}>
-                          <div className="title ellipsis">{m.filename}</div>
+                          <div className="title ellipsis">{m.source_url
+                            ? <a href={m.source_url} target="_blank" rel="noreferrer noopener" title={m.source_url}>{m.filename}</a> : m.filename}</div>
                           <div className="muted">
                             <select className="type-select" aria-label={`Type of ${m.filename}`} value={m.source_type} disabled={working}
                               onChange={e => void setType(m, e.target.value as SourceType)}>
                               {(Object.keys(SOURCE_LABEL) as SourceType[]).map(t => <option key={t} value={t}>{SOURCE_LABEL[t]}</option>)}
                             </select>
-                            {' · '}{m.page_count} page{m.page_count === 1 ? '' : 's'}
+                            {' · '}{m.source_url && m.web_pages ? `${m.web_pages} web page${m.web_pages === 1 ? '' : 's'} · ` : ''}{m.page_count} page{m.page_count === 1 ? '' : 's'}
                             {m.ocr_pages > 0 && ` · ${m.ocr_pages} read by OCR`}{m.status === 'ready' && ` · ${m.chunk_count} passages`}</div>
                         </div>
                       </div>
@@ -129,7 +142,7 @@ export default function Library() {
                           <span className="badge yellow" title="No study track uses this yet. Ask the planner to add it.">Not in a plan</span>}
                         <span className={`badge ${tone(m.status)}`}>{working && <Spinner />}{STAGE[m.status] ?? m.status}</span>
                         {m.status === 'ready' && <button className="ghost sm" aria-expanded={open === m.id} onClick={() => setOpen(open === m.id ? null : m.id)} title="Outline"><Icon name="layers" size={14} /></button>}
-                        {!working && <button className="ghost sm" onClick={() => reindex(m)} title="Re-index"><Icon name="refresh" size={14} /></button>}
+                        {!working && <button className="ghost sm" onClick={() => reindex(m)} title={m.source_url ? 'Fetch the pages again' : 'Re-index'}><Icon name="refresh" size={14} /></button>}
                         <button className="ghost sm" onClick={() => remove(m)} title="Delete" aria-label={`Delete ${m.filename}`}><Icon name="trash" size={14} /></button>
                       </div>
                     </div>
@@ -152,7 +165,7 @@ export default function Library() {
         </div>
         <div>
           <div className="card">
-            <div className="card-head"><h2>Upload</h2></div>
+            <div className="card-head"><h2>Add sources</h2></div>
             <label className={`drop ${over ? 'over' : ''}`} style={{ margin: 0 }}
               onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
               onDrop={e => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files) }}>
@@ -161,7 +174,17 @@ export default function Library() {
               <span className="muted">PDF textbooks, past exam papers, photos or scans of notebooks, .md, .txt, .ipynb</span>
               <input type="file" multiple accept={ACCEPT} disabled={!!busy} onChange={e => { void upload(e.target.files); e.target.value = '' }} />
             </label>
-            <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Files are private to you. Processing reads every page (scans use OCR), finds the chapters and indexes them for search. The type (textbook, past paper, notes) is guessed from the file name; change it in the list. Past papers are indexed question by question so the tutor can quiz you with them.</p>
+            <div className="or-divider"><span>or add a link</span></div>
+            <form onSubmit={addLink}>
+              <div className="row" style={{ flexWrap: 'nowrap' }}>
+                <input aria-label="Link to a web page or docs" type="text" inputMode="url" value={link} onChange={e => setLink(e.target.value)}
+                  placeholder="docs.python.org/3/tutorial/" required />
+                <button disabled={adding || !link.trim()}>{adding ? <Spinner /> : <Icon name="globe" size={16} />}Add</button>
+              </div>
+              <label className="check-row"><input type="checkbox" checked={crawl} onChange={e => setCrawl(e.target.checked)} />
+                <span>Include linked pages from the same docs section <span className="hint">(up to 15)</span></span></label>
+            </form>
+            <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Works with docs sites, articles, public Google Docs and GitHub files. Each page becomes a chapter that links back to it. Everything you add is private to you.</p>
           </div>
           {storage && <div className="card">
             <div className="card-head"><h2>Storage</h2><span className="muted num">{storage.pages_used}{storage.unlimited ? '' : ` / ${storage.page_limit}`} pages</span></div>

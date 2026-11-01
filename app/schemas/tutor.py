@@ -22,6 +22,7 @@ class Citation(BaseModel):
     filename: str
     page: int = 1
     snippet: str = ""
+    url: Optional[str] = None  # the web page, for sources added from a link
 
 
 class AgentStep(BaseModel):

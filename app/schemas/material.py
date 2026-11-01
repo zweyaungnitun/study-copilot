@@ -11,6 +11,9 @@ class MaterialUploadResponse(BaseModel):
     filename: str
     file_type: str
     source_type: str = "textbook"  # textbook, past_paper, notes, other
+    source_url: Optional[str] = None  # set for web sources (re-fetched on re-index)
+    crawl_pages: int = 1
+    web_pages: int = 0
     file_size_bytes: int
     chunk_count: int
     status: str  # pending, extracting, outlining, embedding, ready, failed
@@ -34,10 +37,22 @@ class MaterialUploadResponse(BaseModel):
     def default_source_type(cls, v):
         return v or "textbook"
 
+    @field_validator("crawl_pages", mode="before")
+    @classmethod
+    def one_page(cls, v):
+        return v or 1
+
     @field_validator("progress", "page_count", "ocr_pages", "chunk_count", mode="before")
     @classmethod
     def none_to_zero(cls, v):
         return v or 0
+
+
+class MaterialFromUrl(BaseModel):
+    url: str = Field(..., min_length=4, max_length=2048, description="A web page, docs page, public Google Doc or GitHub file")
+    include_linked_pages: bool = Field(default=False, description="Also add the pages it links to in the same docs section")
+    max_pages: int = Field(default=15, ge=1, le=30)
+    source_type: Optional[str] = Field(default=None, pattern="^(textbook|past_paper|notes|other)$")
 
 
 class MaterialUpdate(BaseModel):
