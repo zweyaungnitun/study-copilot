@@ -127,4 +127,4 @@ async def test_json_endpoint_and_offline_fallback(client: AsyncClient, scripted)
 async def test_stream_rejects_unknown_user(client: AsyncClient, scripted):
     scripted([])
     r = await client.post("/api/tutor/chat/stream", json={"user_id": "nope", "message": "hi"})
-    assert r.status_code == 404
+    assert r.status_code == 401  # no session for that user

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -53,7 +54,32 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+    tokens: dict = {}
+
+    async def remember_token(response):
+        """Like the frontend, keep each signed-in user's token..."""
+        if response.request.url.path in ("/api/auth/register", "/api/auth/login") and response.status_code < 300:
+            await response.aread()
+            data = response.json()
+            if data.get("user_id") and data.get("token"):
+                tokens[data["user_id"]] = data["token"]
+
+    async def send_token(request):
+        """...and send it with requests made for that user. The server still verifies the token matches."""
+        if "authorization" in request.headers:
+            return
+        uid = request.url.params.get("user_id")
+        if uid is None and request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                body = json.loads(request.content or b"null")
+            except ValueError:
+                body = None
+            uid = body.get("user_id") if isinstance(body, dict) else None
+        if uid in tokens:
+            request.headers["Authorization"] = f"Bearer {tokens[uid]}"
+
+    async with AsyncClient(transport=transport, base_url="http://testserver",
+                           event_hooks={"request": [send_token], "response": [remember_token]}) as c:
         yield c
     app.dependency_overrides.clear()
 

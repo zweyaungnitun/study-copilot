@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import observability as tracing
 from app.core.database import get_db
+from app.core.deps import same_user
 from app.models.entities import Chapter, MistakeRecord, Note, User, UserProfile
 from app.schemas.tutor import TutorChatRequest, TutorChatResponse
 from app.services.agent import AgentUnavailable, TutorContext, run_agent
@@ -21,7 +22,7 @@ from app.services.tutor_service import TutorService
 from app.services.usage_service import UsageService
 
 logger = logging.getLogger("studypilot.tutor")
-router = APIRouter(prefix="/tutor", tags=["Socratic Tutor"])
+router = APIRouter(prefix="/tutor", tags=["Socratic Tutor"], dependencies=[Depends(same_user)])
 
 NOTES_BADGE, GENERAL_BADGE = "📚 From your notes", "🌐 General knowledge"
 

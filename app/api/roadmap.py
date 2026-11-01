@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, same_user
 from app.models.entities import Chapter, ChapterSource, MaterialSection, MaterialUpload, Roadmap, Subject, User, UserProfile
 from app.schemas.roadmap import (
     FromMaterialsRequest,
@@ -22,7 +22,7 @@ from app.services.chat_store import ChatStore
 from app.services.track_service import TrackService
 from app.services.roadmap_service import RoadmapService
 
-router = APIRouter(prefix="/roadmap", tags=["Roadmap Generation"])
+router = APIRouter(prefix="/roadmap", tags=["Roadmap Generation"], dependencies=[Depends(same_user)])
 
 
 async def _load_track(db: AsyncSession, roadmap_id: str) -> Roadmap:

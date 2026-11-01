@@ -3,9 +3,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import same_user
 from app.models.entities import MistakeRecord, StudySession, UserProfile
 
-router = APIRouter(prefix="/coach", tags=["AI Coach & Analytics"])
+router = APIRouter(prefix="/coach", tags=["AI Coach & Analytics"], dependencies=[Depends(same_user)])
 
 
 @router.get("/weekly-report")
