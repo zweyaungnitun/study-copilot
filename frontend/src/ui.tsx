@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, useId, type ReactNode } from 'react'
 
 const PATHS = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
@@ -54,9 +54,27 @@ export const Icon = ({ name, size = 18 }: { name: IconName; size?: number }) => 
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={PATHS[name]} /></svg>
 )
 
+/** The StudyPilot mark: an open book with a guiding star rising from its spine. Same drawing as public/favicon.svg. */
+export function BrandMark({ size = 28 }: { size?: number }) {
+  const id = `bm${useId().replace(/:/g, '')}`
+  return (
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#8b6dff" /><stop offset=".55" stopColor="#6e56cf" /><stop offset="1" stopColor="#4f7dff" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="9" fill={`url(#${id})`} />
+      <path d="M16 25.2c-2.8-1.8-6-2.4-9.6-2.1V12.2c3.6-.3 6.8.4 9.6 2.2 2.8-1.8 6-2.5 9.6-2.2v10.9c-3.6-.3-6.8.3-9.6 2.1z" fill="#fff" />
+      <path d="M16 14.6v10.3" stroke="#6e56cf" strokeWidth="1.4" strokeLinecap="round" opacity=".5" />
+      <path d="M16 3.8l1.25 3.35 3.35 1.25-3.35 1.25L16 13l-1.25-3.35L11.4 8.4l3.35-1.25z" fill="#fff" />
+    </svg>
+  )
+}
+
 export const Brand = ({ size = 'md' }: { size?: 'md' | 'lg' }) => (
   <div className={`brand ${size}`}>
-    <span className="brand-mark"><Icon name="spark" size={size === 'lg' ? 22 : 18} /></span>
+    <BrandMark size={size === 'lg' ? 36 : 28} />
     <span className="brand-name">StudyPilot<span className="brand-badge">AI</span></span>
   </div>
 )
