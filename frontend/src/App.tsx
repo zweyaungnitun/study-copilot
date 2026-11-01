@@ -109,8 +109,6 @@ export default function App() {
 
   return (
     <div className="shell">
-      <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-
       <nav className="nav" aria-label="Main">
         <div className="nav-top">
           <Link to="/" className="brand-link" aria-label="StudyPilot home"><Brand /></Link>
