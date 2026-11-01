@@ -1,5 +1,6 @@
+import logging
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,11 +18,16 @@ from app.schemas.roadmap import (
     RoadmapGenerateRequest,
     RoadmapResponse,
 )
-from app.services import curriculum_service
+from app.services import curriculum_service, library
+from app.services.agent import AgentUnavailable, PlannerContext, run_agent
+from app.services.agent.planner_agent import build_planner_graph, build_system_prompt, public_proposal
+from app.services.agent.tutor_agent import to_messages
+from app.core.config import settings
 from app.services.chat_store import ChatStore
 from app.services.track_service import TrackService
 from app.services.roadmap_service import RoadmapService
 
+logger = logging.getLogger("studypilot.roadmap")
 router = APIRouter(prefix="/roadmap", tags=["Roadmap Generation"], dependencies=[Depends(same_user)])
 
 
@@ -206,51 +212,77 @@ async def archive_track(roadmap_id: str, user_id: str = Query(...), db: AsyncSes
     await db.flush()
 
 
+async def _planner_turn(db: AsyncSession, request: RoadmapDiscussRequest, profile: UserProfile, kind: str,
+                        track: Optional[Roadmap], other_tracks: List[str], budget: float, fallback) -> Dict[str, Any]:
+    """One planning-chat turn with the planner agent (offline: the single-shot ``fallback``), persisted to the chat."""
+    chat = None
+    history = [t.model_dump() for t in request.history]
+    if request.session_id:
+        chat = await ChatStore.get_owned(db, request.session_id, request.user_id, kind)
+        history = await ChatStore.history(db, chat.id)
+    ctx = PlannerContext(db=db, user_id=request.user_id, profile=profile, track=track, other_tracks=other_tracks,
+                         budget_hours=budget, unplanned=[m.filename for m in await library.unplanned_materials(db, request.user_id)])
+    result: Dict[str, Any]
+    try:
+        reply, steps = "", []
+        async for ev in run_agent(build_planner_graph(), to_messages(history, request.message), ctx,
+                                  build_system_prompt(ctx, ctx.unplanned), name="planner",
+                                  max_steps=settings.AGENT_PLANNER_MAX_STEPS):
+            if ev["type"] == "final":
+                reply, steps = ev["text"], ev["steps"]
+        result = {"reply": reply, "proposal": public_proposal(ctx.proposal) if ctx.proposal else None,
+                  "steps": steps, "agent": True}
+    except AgentUnavailable as e:
+        logger.info("Planner agent unavailable (%s); using single-shot fallback", e)
+        result = {**await fallback(history), "steps": [], "agent": False}
+    if chat:
+        await ChatStore.add(db, chat, "user", request.message)
+        meta = {"proposal": result["proposal"], "applied": False, "steps": result["steps"]}
+        if track:
+            meta["roadmap_id"] = track.id
+        saved = await ChatStore.add(db, chat, "ai", result["reply"], meta)
+        result["session_id"], result["message_id"] = chat.id, saved.id
+    return result
+
+
 @router.post("/discuss", response_model=RoadmapDiscussResponse)
 async def discuss_roadmap(request: RoadmapDiscussRequest, db: AsyncSession = Depends(get_db)):
-    """Chat about one track. The AI may attach a revised version of it as a proposal (not applied)."""
+    """Chat about one track with the planner agent, which can read the learner's library and attach a
+    revised version of the track as a proposal (not applied)."""
     profile = await db.get(UserProfile, request.user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Create a roadmap first")
     tracks = await TrackService.select(db, request.user_id, request.roadmap_id)
     roadmap = tracks[-1] if not request.roadmap_id else tracks[0]
+    active = await TrackService.active(db, request.user_id)
+    others = [t.specialization for t in active if t.id != roadmap.id]
     current = [
         {"name": s.name, "chapters": [{"title": c.title, "estimated_hours": c.estimated_hours, "status": c.status} for c in s.chapters]}
         for s in sorted(roadmap.subjects, key=lambda x: x.order_index)
     ]
-    others = [t.specialization for t in await TrackService.active(db, request.user_id) if t.id != roadmap.id]
-    chat = None
-    history = [t.model_dump() for t in request.history]
-    if request.session_id:
-        chat = await ChatStore.get_owned(db, request.session_id, request.user_id, "roadmap")
-        history = await ChatStore.history(db, chat.id)
-    result = await RoadmapService.discuss(profile, roadmap.specialization, current, request.message, history, other_tracks=others)
-    if chat:
-        await ChatStore.add(db, chat, "user", request.message)
-        saved = await ChatStore.add(db, chat, "ai", result["reply"], {"proposal": result["proposal"], "applied": False, "roadmap_id": roadmap.id})
-        result["session_id"], result["message_id"] = chat.id, saved.id
-    return RoadmapDiscussResponse(**result)
+
+    async def fallback(history):
+        return await RoadmapService.discuss(profile, roadmap.specialization, current, request.message, history, other_tracks=others)
+
+    budget = await _budget_per_track(db, profile, len(active))
+    return RoadmapDiscussResponse(**await _planner_turn(db, request, profile, "roadmap", roadmap, others, budget, fallback))
 
 
 @router.post("/design", response_model=RoadmapDiscussResponse)
 async def design_track(request: RoadmapDiscussRequest, db: AsyncSession = Depends(get_db)):
-    """Create a NEW track by chatting. The AI asks what it needs, then proposes a complete track."""
+    """Create a NEW track by chatting with the planner agent, which plans from the learner's uploads when
+    they have relevant ones. It asks what it needs, then proposes a complete track."""
     profile = await db.get(UserProfile, request.user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Complete intake first")
     tracks = await TrackService.active(db, request.user_id)
-    chat = None
-    history = [t.model_dump() for t in request.history]
-    if request.session_id:
-        chat = await ChatStore.get_owned(db, request.session_id, request.user_id, "design")
-        history = await ChatStore.history(db, chat.id)
+    names = [t.specialization for t in tracks]
     budget = await _budget_per_track(db, profile, len(tracks) + 1)
-    result = await RoadmapService.design(profile, [t.specialization for t in tracks], request.message, history, budget)
-    if chat:
-        await ChatStore.add(db, chat, "user", request.message)
-        saved = await ChatStore.add(db, chat, "ai", result["reply"], {"proposal": result["proposal"], "applied": False})
-        result["session_id"], result["message_id"] = chat.id, saved.id
-    return RoadmapDiscussResponse(**result)
+
+    async def fallback(history):
+        return await RoadmapService.design(profile, names, request.message, history, budget)
+
+    return RoadmapDiscussResponse(**await _planner_turn(db, request, profile, "design", None, names, budget, fallback))
 
 
 @router.post("/apply", response_model=RoadmapResponse)
@@ -271,6 +303,16 @@ async def apply_roadmap_proposal(request: RoadmapApplyRequest, db: AsyncSession 
     data["specialization"] = request.proposal.specialization
     carry = {}
     if old:
+        # A chapter that keeps its title keeps its material links unless the proposal sets new ones.
+        titles = {c.id: c.title for s in old.subjects for c in s.chapters}
+        links: Dict[str, List[str]] = {}
+        for cid, sid in (await db.execute(select(ChapterSource.chapter_id, ChapterSource.section_id)
+                                          .where(ChapterSource.chapter_id.in_(list(titles))))).all():
+            links.setdefault(titles[cid], []).append(sid)
+        for subj in data["subjects"]:
+            for c in subj["chapters"]:
+                if not c.get("source_section_ids") and c["title"] in links:
+                    c["source_section_ids"] = links[c["title"]]
         carry = {
             c.title: (c.status, c.mastery_score, c.last_reviewed_at)
             for s in old.subjects for c in s.chapters if c.status in ("completed", "in_progress")

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, type ChatMsg, type Proposal, type Roadmap } from '../api'
+import { api, type AgentStep, type ChatMsg, type Proposal, type Roadmap } from '../api'
 import ChatHistory from '../ChatHistory'
 import { useChats } from '../useChats'
-import { Composer, Message, Typing } from '../ChatBits'
+import { Activity, Composer, Message, Typing } from '../ChatBits'
 import { Icon, useToast } from '../ui'
 
-interface Msg { id?: string; me: boolean; text: string; proposal?: Proposal | null; applied?: boolean }
+interface Msg { id?: string; me: boolean; text: string; proposal?: Proposal | null; applied?: boolean; steps?: AgentStep[] }
 const toMsg = (m: ChatMsg): Msg => m.role === 'user' ? { me: true, text: m.content }
-  : { id: m.id, me: false, text: m.content, proposal: (m.meta.proposal as Proposal | null) ?? null, applied: !!m.meta.applied }
+  : { id: m.id, me: false, text: m.content, proposal: (m.meta.proposal as Proposal | null) ?? null, applied: !!m.meta.applied, steps: (m.meta.steps as AgentStep[] | undefined) ?? [] }
 
 const discussStarters = ['Why is this ordered this way?', 'Can I finish this by my deadline?', 'Make it lighter — fewer chapters', 'Add a chapter on exam practice']
 const designStarters = ['I want to learn Spanish for travel', 'Add a statistics track for my data job', 'A track to prepare for the IELTS exam']
@@ -41,7 +41,7 @@ export default function RoadmapAdvisor(props: Props) {
     try {
       const sid = await chats.ensure()
       const r = track ? await api.discussRoadmap(userId, message, sid, track.id) : await api.designTrack(userId, message, sid)
-      setMsgs(m => [...m, { id: r.message_id, me: false, text: r.reply, proposal: r.proposal }])
+      setMsgs(m => [...m, { id: r.message_id, me: false, text: r.reply, proposal: r.proposal, steps: r.steps ?? [] }])
       chats.refresh()
     } catch (e) { setMsgs(m => [...m, { me: false, text: `Sorry — ${(e as Error).message}` }]) }
     finally { setBusy(false) }
@@ -75,6 +75,7 @@ export default function RoadmapAdvisor(props: Props) {
           const removed = track ? [...titles].filter(t => !all.includes(t)) : []
           return (
             <Message key={i} me={m.me} text={m.text}>
+              {!m.me && <Activity steps={m.steps ?? []} live={false} />}
               {m.proposal && <div className="proposal">
                   <b>{track ? 'Proposed' : 'New track'}: {m.proposal.specialization}</b>
                   <div className="muted">{m.proposal.subjects.length} subjects · {all.length} chapters · {Math.round(m.proposal.subjects.reduce((a, s) => a + s.chapters.reduce((h, c) => h + c.estimated_hours, 0), 0))}h</div>

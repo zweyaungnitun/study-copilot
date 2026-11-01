@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entities import Chapter, UserProfile
+from app.models.entities import Chapter, Roadmap, UserProfile
 from app.services.track_service import TrackService
 
 
@@ -16,16 +16,16 @@ def utcnow() -> datetime:
 
 
 @dataclass
-class TutorContext:
-    """Everything one tutor turn needs. Tools record their side effects here for the API response."""
+class AgentContext:
+    """What every agent turn shares: the learner, the DB session, citations and run bookkeeping.
+
+    Tools record their side effects here for the API response.
+    """
     db: AsyncSession
     user_id: str
-    chapter: Optional[Chapter]
-    profile: Optional[UserProfile]
-    mode: str = "socratic"
-    hint_level: int = 1
+    profile: Optional[UserProfile] = None
+    chapter: Optional[Chapter] = None
     citations: List[Dict[str, Any]] = field(default_factory=list)
-    misconceptions: List[str] = field(default_factory=list)
     used_notes: bool = False
     # Run bookkeeping used by the middleware.
     steps: List[Dict[str, Any]] = field(default_factory=list)
@@ -52,3 +52,24 @@ class TutorContext:
             return by_title[hit[0]]
         sub = [c for c in chapters if title.lower() in c.title.lower()]
         return sub[0] if sub else self.chapter
+
+
+@dataclass
+class TutorContext(AgentContext):
+    """One tutor turn."""
+    mode: str = "socratic"
+    hint_level: int = 1
+    misconceptions: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PlannerContext(AgentContext):
+    """One planning-chat turn: revising ``track`` or, without one, designing a new track.
+
+    ``proposal`` is set by the planner's proposal tools and returned to the learner to apply.
+    """
+    track: Optional[Roadmap] = None
+    other_tracks: List[str] = field(default_factory=list)
+    budget_hours: float = 0.0
+    unplanned: List[str] = field(default_factory=list)  # filenames of uploads no active track uses
+    proposal: Optional[Dict[str, Any]] = None

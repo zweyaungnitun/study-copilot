@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { createPortal } from 'react-dom'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, tutorStream, type AgentStep, type ChatMsg, type ChatSummary, type Citation, type TutorReply } from '../api'
+import { Activity } from '../ChatBits'
 import { useChats } from '../useChats'
 import { useAuth } from '../auth'
 import { useLoad } from '../hooks'
@@ -38,24 +39,6 @@ const fromReply = (r: TutorReply): Msg => ({
   badges: [r.source, `Hint ${r.hint_level}`].filter(Boolean), warn: r.detected_misconception || undefined,
   citations: r.citations, steps: r.steps,
 })
-
-/** What the agent did this turn: live while streaming, collapsible afterwards. */
-function Activity({ steps, live }: { steps: AgentStep[]; live: boolean }) {
-  const [open, setOpen] = useState(false)
-  if (!steps.length) return null
-  const show = live || open
-  const list = <ul className="t-steps">{steps.map((s, i) => (
-    <li key={i} className={s.status}>
-      <span className="t-step-dot">{s.status === 'running' ? <Spinner /> : <Icon name={s.status === 'error' ? 'alert' : 'check'} size={12} />}</span>
-      <span>{s.status === 'running' ? `${s.label}…` : s.summary || s.label}</span>
-    </li>))}</ul>
-  if (live) return list
-  return <div className="t-activity">
-    <button className="t-activity-btn" onClick={() => setOpen(o => !o)} aria-expanded={open}>
-      <Icon name="tool" size={13} />Used {steps.length} tool{steps.length > 1 ? 's' : ''}<Icon name="chevron" size={12} /></button>
-    {show && list}
-  </div>
-}
 
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso + 'Z').getTime()) / 60000))

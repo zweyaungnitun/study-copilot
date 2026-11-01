@@ -10,6 +10,7 @@ from langchain_core.runnables import RunnableLambda
 
 from app.core.config import settings
 from app.services.agent import models, runner
+from app.services.agent import planner_agent as pa
 from app.services.agent import tutor_agent as ta
 
 
@@ -91,13 +92,17 @@ class _Live:
 
 @pytest.fixture
 def scripted_models(monkeypatch):
-    """Install scripted models for the tutor graph; returns an installer taking (tutor, researcher, ...)."""
+    """Install scripted models for the agent graphs; returns an installer taking (tutor, researcher, ...).
+
+    The planner uses the same model role as the tutor, so a planner test scripts it via ``tutor``."""
     def install(tutor: List[Any], researcher: Optional[List[Any]] = None, fast: Optional[List[Any]] = None,
                 structured: Optional[Dict[str, Any]] = None, live: bool = True) -> Scripts:
         s = Scripts(tutor, researcher, fast, structured)
         monkeypatch.setattr(models, "chat_model", s.factory)
         monkeypatch.setattr(runner, "llm_client", _Live(live))
         ta.build_tutor_graph.cache_clear()
+        pa.build_planner_graph.cache_clear()
         return s
     yield install
     ta.build_tutor_graph.cache_clear()
+    pa.build_planner_graph.cache_clear()

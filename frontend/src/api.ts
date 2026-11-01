@@ -57,7 +57,7 @@ export interface Roadmap { id: string; specialization: string; total_estimated_h
 export interface ProposalSource { section_id: string; title: string; filename: string; page_start: number; page_end: number; hours: number }
 export interface ProposalChapter { title: string; estimated_hours: number; prerequisites: string[]; source_section_ids?: string[]; sources?: ProposalSource[] }
 export interface Proposal { specialization: string; subjects: { name: string; chapters: ProposalChapter[] }[] }
-export interface DiscussReply { reply: string; proposal: Proposal | null; session_id?: string; message_id?: string }
+export interface DiscussReply { reply: string; proposal: Proposal | null; session_id?: string; message_id?: string; steps?: AgentStep[]; agent?: boolean }
 export interface ChatSummary { id: string; kind: 'tutor' | 'roadmap' | 'design'; chapter_id?: string; title: string; updated_at: string; message_count: number }
 export interface ChatMsg { id: string; role: 'user' | 'ai'; content: string; meta: Record<string, unknown>; created_at: string }
 export interface ChatDetail extends ChatSummary { messages: ChatMsg[] }

@@ -71,7 +71,8 @@ async def test_stream_runs_tools_and_persists(client: AsyncClient, scripted):
     assert done["reply"] == "A **majority** is enough [1]."
     assert done["citations"][0]["filename"] == "paxos.txt"
     assert done["detected_misconception"] == "Thinks Paxos needs every acceptor"
-    assert [s["tool"] for s in done["steps"]] == ["search_study_materials", "log_misconception"]
+    # Both tools were called in one model turn; they run concurrently, so finish order varies.
+    assert sorted(s["tool"] for s in done["steps"]) == ["log_misconception", "search_study_materials"]
     assert done["suggestions"] == SUGGESTIONS["suggestions"]
 
     # The dynamic system prompt carries the learner, chapter and the subagent (`task`) guidance.
@@ -110,7 +111,7 @@ async def test_tutor_delegates_research_to_the_subagent(client: AsyncClient, scr
     # The researcher ran in its own context with its own prompt, and only its brief reached the tutor.
     research_call = models.researcher.calls[0]
     assert "research assistant" in research_call["messages"][0].content
-    assert research_call["tools"] == ["search_study_materials", "get_chapter_notes"]
+    assert research_call["tools"] == ["search_study_materials", "find_past_questions", "get_outline", "get_chapter_notes"]
     brief = [m for m in models.tutor.calls[1]["messages"] if isinstance(m, ToolMessage)][-1]
     assert brief.content.startswith("Brief:") and "Paxos chooses" not in brief.content
 

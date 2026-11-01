@@ -11,7 +11,7 @@ Yields ``{"type": "step" | "delta" | "reset", ...}`` and finally
 """
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -38,7 +38,8 @@ def _usage(msg: AIMessage, usage: Dict[str, int]) -> None:
 
 
 async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], context: Any,
-                    system_prompt: str = "") -> AsyncIterator[Dict[str, Any]]:
+                    system_prompt: str = "", name: str = "tutor",
+                    max_steps: Optional[int] = None) -> AsyncIterator[Dict[str, Any]]:
     if not llm_client.is_live:
         raise AgentUnavailable("no API key configured")
     await UsageService.ensure_quota()  # outside the try below: an over-quota user must not get the offline fallback
@@ -51,7 +52,7 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
     transcript: List[BaseMessage] = list(messages)
     emitted = False
     model_name = settings.GEMINI_AGENT_MODEL or settings.GEMINI_MODEL
-    obs = tracing.start("tutor.agent", as_type="agent", input=tracing.content(messages[-1].content if messages else None),
+    obs = tracing.start(f"{name}.agent", as_type="agent", input=tracing.content(messages[-1].content if messages else None),
                         metadata={"model": model_name, "history": len(messages) - 1})
     callbacks = tracing.langchain_callbacks(obs)
 
@@ -59,7 +60,7 @@ async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], cont
         async for namespace, mode, data in graph.astream(
             {"messages": messages}, context=context, subgraphs=True,
             stream_mode=["messages", "custom", "updates"],
-            config={"recursion_limit": 4 * settings.AGENT_MAX_STEPS + 20, "callbacks": callbacks},
+            config={"recursion_limit": 4 * (max_steps or settings.AGENT_MAX_STEPS) + 20, "callbacks": callbacks},
         ):
             top = not namespace
             if mode == "messages":

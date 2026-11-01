@@ -1,25 +1,26 @@
-"""The tutor's LangChain tools. Each reads the per-request :class:`TutorContext` through ``ToolRuntime``.
+"""The tutor's LangChain tools. Each reads the per-request context through ``ToolRuntime``.
 
-Every tool returns ``(content, artifact)``: ``content`` is the JSON the model sees and ``artifact``
-carries UI-only data (the step summary), so progress text never leaks into the model's context.
+Library tools (search, outlines, past questions) live in :mod:`app.services.agent.library_tools` and are
+shared with the planner; see :mod:`app.services.agent.tools_common` for the ``(content, artifact)`` contract.
 """
-import json
 from datetime import timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from langchain.tools import ToolRuntime, tool
 from sqlalchemy import select
 
 from app.models.entities import MistakeRecord, Note
-from app.services.agent.context import TutorContext, utcnow
-from app.services.rag_service import RAGService
+from app.services.agent.context import AgentContext, TutorContext, utcnow
+from app.services.agent.library_tools import (LIBRARY_LABELS, find_past_questions, get_outline, list_library,
+                                              search_study_materials)
+from app.services.agent.tools_common import Result, _err, _out, _plural
 from app.services.track_service import TrackService
 
-Result = Tuple[str, Dict[str, Any]]
 Runtime = ToolRuntime[TutorContext]
+AnyRuntime = ToolRuntime[AgentContext]
 
 LABELS = {
-    "search_study_materials": "Searching your notes",
+    **LIBRARY_LABELS,
     "get_learner_snapshot": "Checking your progress",
     "get_chapter_notes": "Reading chapter notes",
     "log_misconception": "Logging a misconception",
@@ -27,47 +28,8 @@ LABELS = {
 }
 
 
-def _out(data: Dict[str, Any], summary: str = "") -> Result:
-    return json.dumps(data, ensure_ascii=False, default=str), {"summary": summary}
-
-
-def _err(message: str) -> Result:
-    return _out({"error": message})
-
-
-def _plural(n: int, word: str) -> str:
-    return f"{n} {word}{'' if n == 1 else 's'}"
-
-
-@tool(response_format="content_and_artifact", parse_docstring=True)
-async def search_study_materials(query: str, runtime: Runtime, top_k: int = 4) -> Result:
-    """Search the learner's own uploaded study materials (PDFs, notes) with hybrid keyword + semantic search. Returns numbered passages to cite as [n].
-
-    Args:
-        query: A focused search query, rephrased to be self-contained.
-        top_k: Passages to return (1-6, default 4).
-    """
-    ctx = runtime.context
-    query = (query or "").strip()
-    if not query:
-        return _err("query is required")
-    k = max(1, min(int(top_k or 4), 6))
-    # In a chapter, search the material sections that chapter was built from first.
-    res = (await RAGService.for_chapter(ctx.db, ctx.user_id, ctx.chapter.id, query, top_k=k) if ctx.chapter
-           else await RAGService.aquery_user_knowledge(ctx.user_id, query, top_k=k))
-    if not res["is_grounded_in_notes"]:
-        return _out({"results": [], "note": "Nothing relevant in the learner's uploads."}, "No matching notes")
-    ctx.used_notes = True
-    out = []
-    for m in res["matches"]:
-        cite = ctx.cite(m)
-        out.append({"marker": f"[{cite['n']}]", "source": f"{m['filename']} p.{m['page_number']}",
-                    "relevance": m["score"], "text": m["text"]})
-    return _out({"results": out}, f"Found {_plural(len(out), 'passage')} in your notes")
-
-
 @tool(response_format="content_and_artifact")
-async def get_learner_snapshot(runtime: Runtime) -> Result:
+async def get_learner_snapshot(runtime: AnyRuntime) -> Result:
     """Get the learner's goal, deadline, level, per-track progress, next chapters, weakest chapters and open misconceptions."""
     ctx = runtime.context
     db, p = ctx.db, ctx.profile
@@ -97,7 +59,7 @@ async def get_learner_snapshot(runtime: Runtime) -> Result:
 
 
 @tool(response_format="content_and_artifact", parse_docstring=True)
-async def get_chapter_notes(runtime: Runtime, chapter_title: Optional[str] = None) -> Result:
+async def get_chapter_notes(runtime: AnyRuntime, chapter_title: Optional[str] = None) -> Result:
     """Read the generated study notes and exam focus for a chapter.
 
     Args:
@@ -149,5 +111,6 @@ async def log_misconception(misconception: str, correct_idea: str, runtime: Runt
     return _out({"saved": True, "retest_in_days": 3}, f"Logged to Mistake Notebook: {tag}")
 
 
-TUTOR_TOOLS = [search_study_materials, get_learner_snapshot, get_chapter_notes, log_misconception]
-RESEARCH_TOOLS = [search_study_materials, get_chapter_notes]
+TUTOR_TOOLS = [search_study_materials, find_past_questions, list_library, get_outline, get_learner_snapshot,
+               get_chapter_notes, log_misconception]
+RESEARCH_TOOLS = [search_study_materials, find_past_questions, get_outline, get_chapter_notes]

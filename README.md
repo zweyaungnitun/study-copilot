@@ -9,7 +9,8 @@ An adaptive, offline-resilient AI study copilot. StudyPilot builds a personalise
 - **Materials pipeline**: upload textbooks (PDF), scans or photos of notebooks (OCR), Markdown/text notes and Jupyter notebooks. A background job extracts the text, builds an outline (PDF bookmarks → font-size headings → Markdown headings → LLM segmentation → page windows), summarizes each section, and indexes section-aware chunks for hybrid retrieval. Progress, re-index and delete are in the Library. Each upload has a type (textbook, past paper, notes, other), guessed from the filename and editable; past papers are indexed one question per chunk.
 - **Curriculum from your materials**: pick uploaded materials and the curriculum is built from their outline. Sections become chapters (grouped by the LLM, validated in code, with a reading-order fallback), hours come from word counts, front/back matter is skipped by default, and over-budget plans get suggested skips. Chapters stay linked to their pages, so notes, guides, exams and the tutor are grounded in them.
 - **Study schedule**: a deterministic day-by-day plan across tracks: prerequisite order, ≤50-minute sessions, a daily review block for earlier chapters, a buffer day each week, and final review + mock exams before the deadline. Missed work is re-packed on rebuild.
-- **Agentic tutor**: a streaming, tool-using Socratic tutor. It searches your notes with hybrid keyword + semantic retrieval and cites them, reads chapter notes and your progress, and logs misconceptions to the Mistake Notebook. Built with LangChain `create_agent` on the LangGraph runtime, with guardrail middleware and a deepagents research subagent for multi-source questions. See `app/services/agent/`.
+- **Agentic planner**: the roadmap chat (`/roadmap/discuss`, `/roadmap/design`) is a tool-using agent over your library. It lists your uploads and their outlines, builds or revises tracks linked to the sections they study (validated in code: your own sections, acyclic prerequisites, word-count hours), weights topics by how often past papers examine them, reports which syllabus topics your uploads don't cover, and points out uploads no track uses yet. Proposals are drafts you apply.
+- **Agentic tutor**: a streaming, tool-using Socratic tutor. It searches your materials with hybrid keyword + semantic retrieval (optionally only textbooks, notes or past papers) and cites them, quizzes you with real past exam questions, browses your books' outlines, reads chapter notes and your progress, and logs misconceptions to the Mistake Notebook. Built with LangChain `create_agent` on the LangGraph runtime, with guardrail middleware and a deepagents research subagent for multi-source questions. See `app/services/agent/`.
 - **Mistake notebook**: records errors and misconceptions, with targeted drills.
 - **Exam simulator**: timed mock exams with browser proctoring (tab switches, fullscreen exits, clipboard use and a heartbeat feed a 100-point integrity score).
 - **Admin console** (`/admin`): platform dashboard, live exam proctoring (warn, terminate, review flagged attempts), users & roles, and LLM token management.
@@ -104,6 +105,7 @@ Set these in `.env` (see [.env.example](.env.example)):
 | `GEMINI_EMBED_MODEL` / `EMBED_DIM` | Embedding model for semantic retrieval | `gemini-embedding-001` / `768` |
 | `GEMINI_AGENT_MODEL` | Tutor agent model; empty uses `GEMINI_MODEL` | empty |
 | `AGENT_MAX_STEPS` | Tool-call rounds per tutor turn | `5` |
+| `AGENT_PLANNER_MAX_STEPS` | Tool-call rounds per planner turn | `6` |
 | `AGENT_THINKING_BUDGET` | Reasoning budget for agent turns (0 off, -1 dynamic) | `1024` |
 | `AGENT_TOOL_TIMEOUT_SECONDS` | Per-tool timeout | `20` |
 | `AGENT_RESEARCH_MAX_STEPS` | Tool-call rounds for the research subagent per task | `3` |
@@ -127,7 +129,7 @@ Set these in `.env` (see [.env.example](.env.example)):
 |--------|-------------|
 | `/api/auth` | register, login, current user |
 | `/api/intake` | profile, diagnostic, submit diagnostic |
-| `/api/roadmap` | generate and fetch the roadmap; `from-materials` previews a curriculum from uploads |
+| `/api/roadmap` | generate and fetch the roadmap; `from-materials` previews a curriculum from uploads; `discuss`/`design` chat with the planner agent |
 | `/api/chapters` | chapter notes |
 | `/api/materials` | upload (202, processed in the background), list (with `in_plan`), status, set type, outline, re-index, delete, storage, hybrid search |
 | `/api/schedule` | build/rebuild the day-by-day plan, list tasks, mark done/skipped |

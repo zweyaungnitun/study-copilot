@@ -79,6 +79,8 @@ class RoadmapDiscussRequest(BaseModel):
 class RoadmapDiscussResponse(BaseModel):
     reply: str
     proposal: Optional[RoadmapProposal] = None
+    steps: List[Dict[str, Any]] = Field(default_factory=list)  # planner tool calls, for the UI
+    agent: bool = False  # False when the offline single-shot fallback answered
     session_id: Optional[str] = None
     message_id: Optional[str] = None
 

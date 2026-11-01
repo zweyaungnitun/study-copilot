@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     GEMINI_AGENT_MODEL: str = ""        # tutor agent model; empty = GEMINI_MODEL (e.g. gemini-3.1-pro-preview for depth)
     AGENT_MAX_STEPS: int = 5           # model<->tool round trips per turn
     AGENT_RESEARCH_MAX_STEPS: int = 3  # tool rounds for the researcher subagent per delegated task
+    AGENT_PLANNER_MAX_STEPS: int = 6   # planner rounds: library -> outlines -> propose -> fix
     AGENT_THINKING_BUDGET: int = 1024  # reasoning tokens for agent turns (0 disables, -1 dynamic)
     AGENT_TOOL_TIMEOUT_SECONDS: float = 20.0
     AGENT_SUBAGENT_TIMEOUT_SECONDS: float = 90.0  # a delegated research task (several model + tool calls)
