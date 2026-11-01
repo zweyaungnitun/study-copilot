@@ -25,8 +25,8 @@ class VectorStore:
     async def upsert(self, user_id: str, chunks: Sequence[Dict[str, Any]]) -> int: ...
     async def fetch(self, user_id: str, section_ids: Optional[Sequence[str]] = None,
                     material_ids: Optional[Sequence[str]] = None, only_missing_embeddings: bool = False) -> List[Dict[str, Any]]: ...
-    async def query(self, user_id: str, vector: Sequence[float], k: int,
-                    section_ids: Optional[Sequence[str]] = None) -> List[Tuple[Dict[str, Any], float]]: ...
+    async def query(self, user_id: str, vector: Sequence[float], k: int, section_ids: Optional[Sequence[str]] = None,
+                    material_ids: Optional[Sequence[str]] = None) -> List[Tuple[Dict[str, Any], float]]: ...
     async def set_embeddings(self, user_id: str, vectors: Dict[str, Sequence[float]], model: str) -> None: ...
     async def delete_material(self, user_id: str, material_id: str) -> None: ...
     async def delete_user(self, user_id: str) -> None: ...
@@ -93,14 +93,14 @@ class ChromaVectorStore(VectorStore):
             return [_doc(i, d, m or {}) for i, d, m in zip(res["ids"], res["documents"], res["metadatas"])]
         return await asyncio.to_thread(run)
 
-    async def query(self, user_id, vector, k, section_ids=None):
+    async def query(self, user_id, vector, k, section_ids=None, material_ids=None):
         def run():
             col = self._col(user_id)
             n = col.count()
             if not n:
                 return []
             res = col.query(query_embeddings=[list(vector)], n_results=min(k, n),
-                            where=self._where(section_ids, None, {"embedded": True}), include=["documents", "metadatas", "distances"])
+                            where=self._where(section_ids, material_ids, {"embedded": True}), include=["documents", "metadatas", "distances"])
             return [(_doc(i, d, m or {}), 1.0 - dist) for i, d, m, dist in
                     zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0])]
         try:
@@ -224,14 +224,14 @@ class PgVectorStore(VectorStore):
         async with self.engine.connect() as conn:
             return [self._row(r) for r in (await conn.execute(text(sql + " ORDER BY material_id, chunk_index"), params))]
 
-    async def query(self, user_id, vector, k, section_ids=None):
+    async def query(self, user_id, vector, k, section_ids=None, material_ids=None):
         from sqlalchemy import text
         await self._init()
         params: Dict[str, Any] = {"u": user_id, "v": self._vec(vector), "k": k}
         sql = ("SELECT id, text, material_id, section_id, filename, page_number, chunk_index, chapter_id, embed_model, "
                "TRUE AS has_emb, 1 - (embedding <=> CAST(:v AS vector)) AS sim FROM rag_chunks "
                "WHERE user_id = :u AND embedding IS NOT NULL")
-        sql += self._filters(section_ids, None, params)
+        sql += self._filters(section_ids, material_ids, params)
         async with self.engine.connect() as conn:
             rows = (await conn.execute(text(sql + " ORDER BY embedding <=> CAST(:v AS vector) LIMIT :k"), params)).all()
         return [(self._row(r), float(r._mapping["sim"])) for r in rows]

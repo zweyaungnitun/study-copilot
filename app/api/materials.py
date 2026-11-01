@@ -17,12 +17,13 @@ from app.core.rag_store import rag_store
 from app.models.entities import ChapterSource, MaterialSection, MaterialUpload, User
 from app.schemas.material import (
     MaterialOutline,
+    MaterialUpdate,
     MaterialUploadResponse,
     RAGQueryRequest,
     RAGQueryResponse,
     StorageStatus,
 )
-from app.services import extraction, jobs
+from app.services import extraction, jobs, library
 from app.services.rag_service import RAGService
 from app.services.storage import get_storage
 from app.services.storage_quota import StorageQuota
@@ -67,13 +68,15 @@ async def upload_material(
     response: Response,
     file: UploadFile = File(...),
     user_id: Optional[str] = Form(None),
+    source_type: Optional[str] = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Store an upload and queue it for processing (text/OCR -> outline -> chunks -> embeddings).
 
     Returns 202 with ``status: pending``; poll ``GET /materials/{id}``. Re-uploading identical content
-    returns the existing material (200, ``duplicate: true``).
+    returns the existing material (200, ``duplicate: true``). ``source_type`` (textbook, past_paper,
+    notes, other) is guessed from the filename when omitted.
     """
     if user_id and user_id != user.id:
         raise HTTPException(status_code=403, detail="You can only upload to your own library")
@@ -117,7 +120,8 @@ async def upload_material(
 
     material = MaterialUpload(
         id=material_id, user_id=user.id, filename=filename, file_path=key,
-        file_type=file.content_type or kind, file_size_bytes=size, sha256=sha, page_count=pages, status="pending",
+        file_type=file.content_type or kind, source_type=library.normalize_source_type(source_type, filename),
+        file_size_bytes=size, sha256=sha, page_count=pages, status="pending",
     )
     db.add(material)
     await db.flush()
@@ -130,7 +134,9 @@ async def upload_material(
 async def list_materials(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The signed-in user's materials, newest first (poll while any is processing)."""
     stmt = select(MaterialUpload).where(MaterialUpload.user_id == user.id).order_by(MaterialUpload.created_at.desc())
-    return (await db.execute(stmt)).scalars().all()
+    planned = await library.planned_material_ids(db, user.id)
+    return [MaterialUploadResponse.model_validate(m).model_copy(update={"in_plan": m.id in planned})
+            for m in (await db.execute(stmt)).scalars().all()]
 
 
 @router.get("/storage", response_model=StorageStatus)
@@ -150,6 +156,20 @@ async def get_outline(material_id: str, user: User = Depends(get_current_user), 
     sections = (await db.execute(select(MaterialSection).where(MaterialSection.material_id == m.id)
                                  .order_by(MaterialSection.order))).scalars().all()
     return {"material": m, "sections": sections}
+
+
+@router.patch("/{material_id}", response_model=MaterialUploadResponse)
+async def update_material(material_id: str, request: MaterialUpdate, user: User = Depends(get_current_user),
+                          db: AsyncSession = Depends(get_db)):
+    """Change what a material is. Past papers are chunked one question per chunk, so switching to or
+    from ``past_paper`` re-indexes it."""
+    m = await owned(db, material_id, user)
+    rechunk = (request.source_type == "past_paper") != ((m.source_type or "textbook") == "past_paper")
+    m.source_type = request.source_type
+    await db.flush()
+    if rechunk and m.status in library.READY:
+        await requeue(db, m)
+    return m
 
 
 @router.delete("/{material_id}", status_code=status.HTTP_204_NO_CONTENT)

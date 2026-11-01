@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, PROCESSING, type Material, type RAGResult, type Section, type Storage } from '../api'
+import { api, PROCESSING, SOURCE_LABEL, type Material, type RAGResult, type Section, type SourceType, type Storage } from '../api'
 import { Empty, ErrorBox, Icon, Markdown, PageHeader, ProgressBar, Spinner, useToast } from '../ui'
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.markdown,.ipynb'
@@ -73,6 +73,13 @@ export default function Library() {
     try { await api.deleteMaterial(m.id); setPicked(p => p.filter(x => x !== m.id)); toast('ok', `${m.filename} deleted`); await refresh() }
     catch (e) { toast('err', (e as Error).message) }
   }
+  const setType = async (m: Material, t: SourceType) => {
+    try {
+      const u = await api.setMaterialType(m.id, t)
+      toast('ok', PROCESSING.includes(u.status) ? `${m.filename} is now a ${SOURCE_LABEL[t].toLowerCase()} — re-indexing` : `${m.filename} is now a ${SOURCE_LABEL[t].toLowerCase()}`)
+      await refresh()
+    } catch (e) { toast('err', (e as Error).message) }
+  }
   const reindex = async (m: Material) => {
     try { await api.reindexMaterial(m.id); toast('ok', `Re-indexing ${m.filename}`); await refresh() }
     catch (e) { toast('err', (e as Error).message) }
@@ -108,11 +115,18 @@ export default function Library() {
                         <span className="file-ic"><Icon name="file" size={16} /></span>
                         <div style={{ minWidth: 0 }}>
                           <div className="title ellipsis">{m.filename}</div>
-                          <div className="muted">{m.page_count} page{m.page_count === 1 ? '' : 's'}
+                          <div className="muted">
+                            <select className="type-select" aria-label={`Type of ${m.filename}`} value={m.source_type} disabled={working}
+                              onChange={e => void setType(m, e.target.value as SourceType)}>
+                              {(Object.keys(SOURCE_LABEL) as SourceType[]).map(t => <option key={t} value={t}>{SOURCE_LABEL[t]}</option>)}
+                            </select>
+                            {' · '}{m.page_count} page{m.page_count === 1 ? '' : 's'}
                             {m.ocr_pages > 0 && ` · ${m.ocr_pages} read by OCR`}{m.status === 'ready' && ` · ${m.chunk_count} passages`}</div>
                         </div>
                       </div>
                       <div className="row" style={{ flexWrap: 'nowrap', gap: 6 }}>
+                        {m.in_plan === false && m.status === 'ready' && (m.source_type === 'textbook' || m.source_type === 'notes') &&
+                          <span className="badge yellow" title="No study track uses this yet. Ask the planner to add it.">Not in a plan</span>}
                         <span className={`badge ${tone(m.status)}`}>{working && <Spinner />}{STAGE[m.status] ?? m.status}</span>
                         {m.status === 'ready' && <button className="ghost sm" aria-expanded={open === m.id} onClick={() => setOpen(open === m.id ? null : m.id)} title="Outline"><Icon name="layers" size={14} /></button>}
                         {!working && <button className="ghost sm" onClick={() => reindex(m)} title="Re-index"><Icon name="refresh" size={14} /></button>}
@@ -144,10 +158,10 @@ export default function Library() {
               onDrop={e => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files) }}>
               {busy ? <Spinner /> : <Icon name="upload" size={24} />}
               <b>{busy ? `Uploading ${busy} file${busy > 1 ? 's' : ''}…` : 'Drop files or click to browse'}</b>
-              <span className="muted">PDF textbooks, photos or scans of notebooks, .md, .txt, .ipynb</span>
+              <span className="muted">PDF textbooks, past exam papers, photos or scans of notebooks, .md, .txt, .ipynb</span>
               <input type="file" multiple accept={ACCEPT} disabled={!!busy} onChange={e => { void upload(e.target.files); e.target.value = '' }} />
             </label>
-            <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Files are private to you. Processing reads every page (scans use OCR), finds the chapters and indexes them for search.</p>
+            <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Files are private to you. Processing reads every page (scans use OCR), finds the chapters and indexes them for search. The type (textbook, past paper, notes) is guessed from the file name; change it in the list. Past papers are indexed question by question so the tutor can quiz you with them.</p>
           </div>
           {storage && <div className="card">
             <div className="card-head"><h2>Storage</h2><span className="muted num">{storage.pages_used}{storage.unlimited ? '' : ` / ${storage.page_limit}`} pages</span></div>

@@ -2582,3 +2582,6 @@ button.danger:hover:not(:disabled) { background: var(--red-text); }
 .task.skipped, .task.missed { opacity: 0.7; }
 .task .badge { font-size: 11px; }
 .task button.sm { padding: 2px 6px; }
+
+/* Library: material type picker inside the muted meta line */
+.material .type-select { width: auto; display: inline-block; padding: 1px 6px; font-size: 12px; min-width: 0; }

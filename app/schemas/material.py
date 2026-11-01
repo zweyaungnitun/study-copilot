@@ -10,6 +10,7 @@ class MaterialUploadResponse(BaseModel):
     user_id: str
     filename: str
     file_type: str
+    source_type: str = "textbook"  # textbook, past_paper, notes, other
     file_size_bytes: int
     chunk_count: int
     status: str  # pending, extracting, outlining, embedding, ready, failed
@@ -21,16 +22,26 @@ class MaterialUploadResponse(BaseModel):
     created_at: datetime
     processed_at: Optional[datetime] = None
     duplicate: bool = False
+    in_plan: Optional[bool] = None  # set on the library list: does an active track use this material?
 
     @field_validator("status")
     @classmethod
     def legacy_status(cls, v: str) -> str:
         return "ready" if v == "processed" else v  # rows indexed before the pipeline existed
 
+    @field_validator("source_type", mode="before")
+    @classmethod
+    def default_source_type(cls, v):
+        return v or "textbook"
+
     @field_validator("progress", "page_count", "ocr_pages", "chunk_count", mode="before")
     @classmethod
     def none_to_zero(cls, v):
         return v or 0
+
+
+class MaterialUpdate(BaseModel):
+    source_type: str = Field(..., pattern="^(textbook|past_paper|notes|other)$")
 
 
 class MaterialSectionOut(BaseModel):

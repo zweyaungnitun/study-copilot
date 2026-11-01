@@ -114,7 +114,9 @@ export async function tutorStream(body: Record<string, unknown>, onEvent: (e: Tu
 export interface BrainNode { track?: string; id: string; label: string; status: string; retention_score: number; color: string; mastery_percentage: number }
 export interface BrainMap { nodes: BrainNode[]; edges: { source: string; target: string }[]; overall_retention_average: number; total_nodes: number; at_risk_count: number }
 export type MaterialStatus = 'pending' | 'extracting' | 'outlining' | 'embedding' | 'ready' | 'failed'
-export interface Material { id: string; user_id: string; filename: string; file_type: string; file_size_bytes: number; chunk_count: number; status: MaterialStatus; progress: number; page_count: number; ocr_pages: number; outline_source?: string | null; error?: string | null; created_at: string; processed_at?: string | null; duplicate?: boolean }
+export type SourceType = 'textbook' | 'past_paper' | 'notes' | 'other'
+export const SOURCE_LABEL: Record<SourceType, string> = { textbook: 'Textbook', past_paper: 'Past paper', notes: 'Notes', other: 'Other' }
+export interface Material { id: string; user_id: string; filename: string; file_type: string; source_type: SourceType; in_plan?: boolean | null; file_size_bytes: number; chunk_count: number; status: MaterialStatus; progress: number; page_count: number; ocr_pages: number; outline_source?: string | null; error?: string | null; created_at: string; processed_at?: string | null; duplicate?: boolean }
 export const PROCESSING: MaterialStatus[] = ['pending', 'extracting', 'outlining', 'embedding']
 export interface Section { id: string; parent_id?: string | null; level: number; order: number; title: string; page_start: number; page_end: number; word_count: number; summary?: string | null; key_concepts: string[] }
 export interface Storage { pages_used: number; page_limit: number; unlimited: boolean; custom_limit: boolean }
@@ -213,10 +215,12 @@ export const api = {
   material: (id: string) => get<Material>(`/materials/${id}`),
   outline: (id: string) => get<{ material: Material; sections: Section[] }>(`/materials/${id}/outline`),
   storage: () => get<Storage>('/materials/storage'),
-  upload: (file: File) => {
+  upload: (file: File, source_type?: SourceType) => {
     const f = new FormData(); f.append('file', file)
+    if (source_type) f.append('source_type', source_type)
     return request<Material>('/materials/upload', { method: 'POST', body: f })
   },
+  setMaterialType: (id: string, source_type: SourceType) => patch<Material>(`/materials/${id}`, { source_type }),
   deleteMaterial: (id: string) => request<void>(`/materials/${id}`, { method: 'DELETE' }),
   reindexMaterial: (id: string) => post<Material>(`/materials/${id}/reindex`),
   queryMaterials: (query: string) => post<RAGResult>('/materials/query', { query }),

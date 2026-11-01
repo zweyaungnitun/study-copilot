@@ -43,19 +43,22 @@ class RAGService:
         top_k: int = 4,
         chapter_id: Optional[str] = None,
         section_ids: Optional[Sequence[str]] = None,
+        material_ids: Optional[Sequence[str]] = None,
     ) -> Dict[str, Any]:
         """Hybrid (keyword + semantic) retrieval over the learner's materials.
 
         With ``section_ids`` the search is limited to those sections; if nothing there matches, it widens
-        to all of the learner's materials so a chapter question can still be grounded.
+        to all of the learner's materials so a chapter question can still be grounded. ``material_ids``
+        always applies (e.g. search only past papers).
         """
         matches = []
         if section_ids:
             matches = await rag_store.hybrid_search(user_id, query, top_k=top_k, chapter_id=chapter_id,
-                                                    lexical_threshold=cls.SIMILARITY_THRESHOLD, section_ids=section_ids)
+                                                    lexical_threshold=cls.SIMILARITY_THRESHOLD, section_ids=section_ids,
+                                                    material_ids=material_ids)
         if not matches:
             matches = await rag_store.hybrid_search(user_id, query, top_k=top_k, chapter_id=chapter_id,
-                                                    lexical_threshold=cls.SIMILARITY_THRESHOLD)
+                                                    lexical_threshold=cls.SIMILARITY_THRESHOLD, material_ids=material_ids)
         if not matches:
             return {"badge": GENERAL_BADGE, "is_grounded_in_notes": False, "sources": [],
                     "context_text": "", "top_score": 0.0, "matches": []}
@@ -70,7 +73,9 @@ class RAGService:
         }
 
     @classmethod
-    async def for_chapter(cls, db: AsyncSession, user_id: str, chapter_id: str, query: str, top_k: int = 6) -> Dict[str, Any]:
+    async def for_chapter(cls, db: AsyncSession, user_id: str, chapter_id: str, query: str, top_k: int = 6,
+                          material_ids: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Retrieval scoped to the sections a chapter covers (falls back to all materials)."""
         return await cls.aquery_user_knowledge(user_id, query, top_k=top_k, chapter_id=chapter_id,
-                                               section_ids=await cls.chapter_section_ids(db, chapter_id))
+                                               section_ids=await cls.chapter_section_ids(db, chapter_id),
+                                               material_ids=material_ids)

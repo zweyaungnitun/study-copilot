@@ -85,6 +85,31 @@ def semantic_chunks(text: str, target: int = 900, overlap: int = 150) -> List[st
     return chunks
 
 
+# A line that starts a new exam question: "Q3", "Question 3", "3.", "3)", "(3)". Sub-parts like "(a)" stay with
+# their question.
+QUESTION_START = re.compile(r"^\s*(?:Q(?:uestion)?\s*\.?\s*\d{1,3}\b|\(?\d{1,3}[.)]\s+\S)", re.I | re.M)
+
+
+def question_chunks(text: str, target: int = CHUNK_TARGET, overlap: int = CHUNK_OVERLAP) -> List[str]:
+    """Past papers: one chunk per question so a search returns whole questions.
+
+    Falls back to :func:`semantic_chunks` when no question numbering is found, and splits a single very long
+    question the same way.
+    """
+    text = (text or "").strip()
+    starts = [m.start() for m in QUESTION_START.finditer(text)]
+    if len(starts) < 2:
+        return semantic_chunks(text, target, overlap)
+    blocks = [text[:starts[0]]] + [text[a:b] for a, b in zip(starts, starts[1:] + [len(text)])]
+    out: List[str] = []
+    for b in blocks:
+        b = re.sub(r"[ \t]+", " ", b).strip()
+        if not b:
+            continue
+        out.extend([b] if len(b) <= 3 * target else semantic_chunks(b, target, overlap))
+    return out
+
+
 class IngestionError(Exception):
     """A failure the learner should see (bad file, over budget); not retried."""
 
@@ -234,8 +259,9 @@ class IngestionPipeline:
     def _chunks(m: MaterialUpload, outline: Outline, section_ids: List[str]) -> List[Dict[str, Any]]:
         """Chunks never cross a section (or page) boundary, so each cites one section and page."""
         chunks: List[Dict[str, Any]] = []
+        split = question_chunks if m.source_type == "past_paper" else semantic_chunks
         for seg in outline.segments:
-            for block in semantic_chunks(seg.text, target=CHUNK_TARGET, overlap=CHUNK_OVERLAP):
+            for block in split(seg.text, target=CHUNK_TARGET, overlap=CHUNK_OVERLAP):
                 n = len(chunks)
                 digest = hashlib.sha1(f"{m.id}:{n}:{block}".encode()).hexdigest()[:16]
                 chunks.append({

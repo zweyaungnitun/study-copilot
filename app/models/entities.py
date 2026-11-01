@@ -180,6 +180,7 @@ class MaterialUpload(Base):
     filename = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)  # storage key (local path or object key)
     file_type = Column(String(50), nullable=False)
+    source_type = Column(String(20), default="textbook")  # textbook, past_paper, notes, other
     file_size_bytes = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
     # pending -> extracting -> outlining -> embedding -> ready | failed

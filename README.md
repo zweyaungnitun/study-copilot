@@ -6,7 +6,7 @@ An adaptive, offline-resilient AI study copilot. StudyPilot builds a personalise
 
 - **Intake & diagnostics**: learner profile plus a diagnostic quiz to find starting knowledge.
 - **Roadmap generation**: a dependency-aware (DAG) study plan, rescheduled when the student falls behind.
-- **Materials pipeline**: upload textbooks (PDF), scans or photos of notebooks (OCR), Markdown/text notes and Jupyter notebooks. A background job extracts the text, builds an outline (PDF bookmarks → font-size headings → Markdown headings → LLM segmentation → page windows), summarizes each section, and indexes section-aware chunks for hybrid retrieval. Progress, re-index and delete are in the Library.
+- **Materials pipeline**: upload textbooks (PDF), scans or photos of notebooks (OCR), Markdown/text notes and Jupyter notebooks. A background job extracts the text, builds an outline (PDF bookmarks → font-size headings → Markdown headings → LLM segmentation → page windows), summarizes each section, and indexes section-aware chunks for hybrid retrieval. Progress, re-index and delete are in the Library. Each upload has a type (textbook, past paper, notes, other), guessed from the filename and editable; past papers are indexed one question per chunk.
 - **Curriculum from your materials**: pick uploaded materials and the curriculum is built from their outline. Sections become chapters (grouped by the LLM, validated in code, with a reading-order fallback), hours come from word counts, front/back matter is skipped by default, and over-budget plans get suggested skips. Chapters stay linked to their pages, so notes, guides, exams and the tutor are grounded in them.
 - **Study schedule**: a deterministic day-by-day plan across tracks: prerequisite order, ≤50-minute sessions, a daily review block for earlier chapters, a buffer day each week, and final review + mock exams before the deadline. Missed work is re-packed on rebuild.
 - **Agentic tutor**: a streaming, tool-using Socratic tutor. It searches your notes with hybrid keyword + semantic retrieval and cites them, reads chapter notes and your progress, and logs misconceptions to the Mistake Notebook. Built with LangChain `create_agent` on the LangGraph runtime, with guardrail middleware and a deepagents research subagent for multi-source questions. See `app/services/agent/`.
@@ -129,7 +129,7 @@ Set these in `.env` (see [.env.example](.env.example)):
 | `/api/intake` | profile, diagnostic, submit diagnostic |
 | `/api/roadmap` | generate and fetch the roadmap; `from-materials` previews a curriculum from uploads |
 | `/api/chapters` | chapter notes |
-| `/api/materials` | upload (202, processed in the background), list, status, outline, re-index, delete, storage, hybrid search |
+| `/api/materials` | upload (202, processed in the background), list (with `in_plan`), status, set type, outline, re-index, delete, storage, hybrid search |
 | `/api/schedule` | build/rebuild the day-by-day plan, list tasks, mark done/skipped |
 | `/api/tutor` | Socratic chat |
 | `/api/mistakes` | log, list, resolve, drill |

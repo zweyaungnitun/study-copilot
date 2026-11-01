@@ -131,16 +131,18 @@ class RAGStore:
         chapter_id: Optional[str] = None,
         lexical_threshold: float = 0.65,
         section_ids: Optional[Sequence[str]] = None,
+        material_ids: Optional[Sequence[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Hybrid retrieval: BM25 + dense embeddings fused with Reciprocal Rank Fusion.
 
         A chunk qualifies when it passes either the keyword-overlap gate or the semantic gate, so
         paraphrased questions still find the right notes. ``section_ids`` limits the search to those
-        material sections (a chapter's sources). Falls back to keyword-only without embeddings.
+        material sections (a chapter's sources) and ``material_ids`` to those materials (e.g. only past
+        papers). Falls back to keyword-only without embeddings.
         """
         if not query.strip():
             return []
-        docs = await self.store.fetch(user_id, section_ids=section_ids)
+        docs = await self.store.fetch(user_id, section_ids=section_ids, material_ids=material_ids)
         if not docs:
             return []
         from app.services.llm_client import llm_client
@@ -156,7 +158,8 @@ class RAGStore:
             await self._backfill(user_id, section_ids)
             qv = await llm_client.embed([query], "RETRIEVAL_QUERY")
             if qv:
-                for doc, sim in await self.store.query(user_id, qv[0], self.DENSE_CANDIDATES, section_ids=section_ids):
+                for doc, sim in await self.store.query(user_id, qv[0], self.DENSE_CANDIDATES, section_ids=section_ids,
+                                                       material_ids=material_ids):
                     dense[doc["chunk_id"]] = sim
 
         idx = range(len(docs))
