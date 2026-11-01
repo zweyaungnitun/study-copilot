@@ -225,7 +225,7 @@ async def _planner_turn(db: AsyncSession, request: RoadmapDiscussRequest, profil
     result: Dict[str, Any]
     try:
         reply, steps = "", []
-        async for ev in run_agent(build_planner_graph(), to_messages(history, request.message), ctx,
+        async for ev in run_agent(build_planner_graph, to_messages(history, request.message), ctx,
                                   build_system_prompt(ctx, ctx.unplanned), name="planner",
                                   max_steps=settings.AGENT_PLANNER_MAX_STEPS):
             if ev["type"] == "final":

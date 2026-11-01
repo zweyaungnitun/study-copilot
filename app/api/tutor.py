@@ -75,8 +75,7 @@ async def run_turn(request: TutorChatRequest, db: AsyncSession) -> AsyncIterator
 
     reply, steps, used_agent = "", [], True
     try:
-        graph = build_tutor_graph(request.mode)
-        async for ev in run_agent(graph, to_messages(history, request.message), ctx, build_system_prompt(ctx)):
+        async for ev in run_agent(lambda: build_tutor_graph(request.mode), to_messages(history, request.message), ctx, build_system_prompt(ctx)):
             if ev["type"] == "final":
                 reply, steps = ev["text"], ev["steps"]
             else:

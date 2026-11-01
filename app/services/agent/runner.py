@@ -11,7 +11,7 @@ Yields ``{"type": "step" | "delta" | "reset", ...}`` and finally
 """
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -37,11 +37,15 @@ def _usage(msg: AIMessage, usage: Dict[str, int]) -> None:
     usage["thinking"] += (u.get("output_token_details") or {}).get("reasoning", 0)
 
 
-async def run_agent(graph: CompiledStateGraph, messages: List[BaseMessage], context: Any,
-                    system_prompt: str = "", name: str = "tutor",
+async def run_agent(graph: Union[CompiledStateGraph, Callable[[], CompiledStateGraph]], messages: List[BaseMessage],
+                    context: Any, system_prompt: str = "", name: str = "tutor",
                     max_steps: Optional[int] = None) -> AsyncIterator[Dict[str, Any]]:
+    """``graph`` may be a builder: it is then only called once a model is configured, so building the
+    chat model without credentials can't bypass the caller's offline fallback."""
     if not llm_client.is_live:
         raise AgentUnavailable("no API key configured")
+    if not isinstance(graph, CompiledStateGraph):
+        graph = graph()
     await UsageService.ensure_quota()  # outside the try below: an over-quota user must not get the offline fallback
     started = time.perf_counter()
     usage = {"input": 0, "output": 0, "thinking": 0}
