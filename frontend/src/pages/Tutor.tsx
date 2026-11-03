@@ -122,7 +122,7 @@ export default function Tutor() {
   const chapterId = params.get('chapter')
   const chats = useChats<Msg>(session!.user_id, 'tutor', chapterId, toMsg)
   const { msgs, setMsgs } = chats
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => params.get('q') ?? '')  // a question handed over from another page
   const [hint, setHint] = useState(1)
   const [mode, setMode] = useState<'socratic' | 'direct'>('socratic')
   const [busy, setBusy] = useState(false)
@@ -211,7 +211,7 @@ export default function Tutor() {
         <div className="t-scroll" ref={scroller} onScroll={onScroll} aria-live="polite">
           {!msgs.length && !chats.loading && <div className="t-welcome">
             <div className="t-hero-orb"><Orb size={64} /></div>
-            <h2>Hi {session!.username}, what are we learning today?</h2>
+            <h2>Hi <span className="grad-text">{session!.username}</span>, what are we learning today?</h2>
             <p className="muted">{chapter.data ? <>I’ve read your notes on <b>{chapter.data.title}</b>. Pick a starting point or ask anything.</> : 'Ask a question, paste a problem, or pick a starting point.'}</p>
             <div className="t-starters">
               {starters.map(([label, prompt], i) => (

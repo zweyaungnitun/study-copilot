@@ -1,8 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { api, type DiagQ, type DiagResult } from '../api'
 import { useAuth } from '../auth'
-import { ErrorBox, Icon, PageHeader, Spinner } from '../ui'
+import { ErrorBox, Icon, PageHeader, Segmented, Spinner } from '../ui'
+
+/** One onboarding step; slides in from the right when the step changes. */
+const Step = ({ children }: { children: ReactNode }) => (
+  <motion.div className="narrow" initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 28 }}>{children}</motion.div>)
 
 export default function Onboarding() {
   const { session } = useAuth()
@@ -33,7 +38,7 @@ export default function Onboarding() {
   const today = new Date().toISOString().slice(0, 10)
 
   if (result) return (
-    <div className="narrow">{steps}
+    <Step key="result">{steps}
       <PageHeader title={`You're at ${result.calibrated_level} level`} sub={`Diagnostic score: ${Math.round(result.score_percentage)}%`} />
       <div className="card"><h2>Recommended focus</h2><p>{result.recommended_focus}</p>
         {result.identified_weaknesses.length > 0 && <div className="row" style={{ marginTop: 12 }}>{result.identified_weaknesses.map(w => <span key={w} className="badge yellow">{w}</span>)}</div>}</div>
@@ -43,9 +48,9 @@ export default function Onboarding() {
         <p className="muted" style={{ marginTop: 8 }}>You can also refine the roadmap afterwards by chatting with the AI advisor.</p></div>
       {err && <ErrorBox>{err}</ErrorBox>}
       <button className="lg" disabled={busy} onClick={build}>{busy ? <Spinner /> : <Icon name="map" size={16} />}{busy ? 'Building your roadmap…' : 'Generate my roadmap'}</button>
-    </div>)
+    </Step>)
   if (quiz) return (
-    <div className="narrow">{steps}
+    <Step key="quiz">{steps}
       <PageHeader title="Quick diagnostic" sub={`${Object.keys(answers).length} of ${quiz.length} answered — this helps us calibrate your plan.`} />
       {quiz.map((q, n) => (
         <div className="card" key={q.id}><h2><span className="muted">{n + 1}.</span> {q.question}</h2>
@@ -55,21 +60,27 @@ export default function Onboarding() {
       {err && <ErrorBox>{err}</ErrorBox>}
       <div className="row"><button className="lg" disabled={busy || Object.keys(answers).length < quiz.length} onClick={submitQuiz}>{busy && <Spinner />}Submit</button>
         <button className="ghost lg" disabled={busy} onClick={build}>Skip for now</button></div>
-    </div>)
+    </Step>)
   return (
-    <div className="narrow">{steps}
+    <Step key="goal">{steps}
       <PageHeader title="Set your goal" sub="Tell us what you're aiming for and we'll plan the route." />
       <form className="card" onSubmit={saveProfile}>
         <label htmlFor="goal" style={{ marginTop: 0 }}>What do you want to learn?</label>
         <input id="goal" value={f.goal} placeholder="e.g. Organic chemistry, Data structures" onChange={e => setF({ ...f, goal: e.target.value })} minLength={3} required />
         <div className="form-grid">
           <div><label htmlFor="dl">Deadline</label><input id="dl" type="date" min={today} value={f.deadline} onChange={e => setF({ ...f, deadline: e.target.value })} required /></div>
-          <div><label htmlFor="hpd">Hours per day</label><input id="hpd" type="number" min={0.5} max={8} step={0.5} value={f.hours_per_day} onChange={e => setF({ ...f, hours_per_day: +e.target.value })} /></div>
-          <div><label htmlFor="lv">Current level</label><select id="lv" value={f.level} onChange={e => setF({ ...f, level: e.target.value })}><option>beginner</option><option>intermediate</option><option>advanced</option></select></div>
-          <div><label htmlFor="pt">Preferred study time</label><select id="pt" value={f.preferred_study_time} onChange={e => setF({ ...f, preferred_study_time: e.target.value })}><option>morning</option><option>afternoon</option><option>evening</option></select></div>
+          <div><label htmlFor="hpd">Hours per day <b className="range-value num">{f.hours_per_day} h</b></label>
+            <input id="hpd" className="range" type="range" min={0.5} max={8} step={0.5} value={f.hours_per_day}
+              style={{ ['--p' as string]: `${((f.hours_per_day - 0.5) / 7.5) * 100}%` }} onChange={e => setF({ ...f, hours_per_day: +e.target.value })} /></div>
         </div>
+        <label>Current level</label>
+        <Segmented label="Current level" value={f.level} onChange={level => setF({ ...f, level })}
+          options={[['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['advanced', 'Advanced']]} />
+        <label>Preferred study time</label>
+        <Segmented label="Preferred study time" value={f.preferred_study_time} onChange={t => setF({ ...f, preferred_study_time: t })}
+          options={[['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening']]} />
         {err && <ErrorBox>{err}</ErrorBox>}
         <button className="lg" style={{ marginTop: 22 }} disabled={busy}>{busy ? <Spinner /> : <Icon name="arrow" size={16} />}Continue</button>
       </form>
-    </div>)
+    </Step>)
 }

@@ -1,26 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { api, type Roadmap } from './api'
 import { useAuth } from './auth'
-import { Brand, Icon, ProgressRing, applyTheme, initialTheme, type IconName, type Theme } from './ui'
+import { Brand, Icon, ProgressRing, Skeleton, applyTheme, initialTheme, type IconName, type Theme } from './ui'
 import { CommandPalette, useCommandHotkey, type Command } from './CommandPalette'
+import { motion } from 'motion/react'
+import { SPRING } from './ui'
 import Login from './pages/Login'
-import Onboarding from './pages/Onboarding'
+const Onboarding = lazy(() => import('./pages/Onboarding'))
 import Dashboard from './pages/Dashboard'
-import RoadmapPage from './pages/Roadmap'
-import ChapterPage from './pages/Chapter'
-import Tutor from './pages/Tutor'
-import BrainMapPage from './pages/BrainMap'
-import Library from './pages/Library'
-import Mistakes from './pages/Mistakes'
-import Leaderboard from './pages/Leaderboard'
-import ExamPage from './pages/Exam'
-import MaterialsWizard from './pages/MaterialsWizard'
-import SchedulePage from './pages/Schedule'
-import Usage from './pages/Usage'
-import AdminApp from './admin/AdminApp'
+const RoadmapPage = lazy(() => import('./pages/Roadmap'))
+const ChapterPage = lazy(() => import('./pages/Chapter'))
+const Tutor = lazy(() => import('./pages/Tutor'))
+const BrainMapPage = lazy(() => import('./pages/BrainMap'))
+const Library = lazy(() => import('./pages/Library'))
+const Mistakes = lazy(() => import('./pages/Mistakes'))
+const Leaderboard = lazy(() => import('./pages/Leaderboard'))
+const ExamPage = lazy(() => import('./pages/Exam'))
+const MaterialsWizard = lazy(() => import('./pages/MaterialsWizard'))
+const SchedulePage = lazy(() => import('./pages/Schedule'))
+const Usage = lazy(() => import('./pages/Usage'))
+const AdminApp = lazy(() => import('./admin/AdminApp'))
 
 type NavItem = [to: string, label: string, icon: IconName]
+/** Each section has its own color in the navigation. */
+const TONES: Partial<Record<IconName, string>> = {
+  home: 'violet', calendar: 'mint', map: 'peach', chat: 'violet', brain: 'butter', book: 'sky', alert: 'rose', exam: 'rose', trophy: 'butter', gauge: 'mint', shield: 'gray',
+}
 const learn: NavItem[] = [
   ['/', 'Home', 'home'], ['/schedule', 'Schedule', 'calendar'], ['/roadmap', 'Roadmap', 'map'], ['/tutor', 'AI Tutor', 'chat'],
 ]
@@ -40,10 +46,14 @@ function crumbFor(path: string): [string, string] {
   return ins ? ['Insights', ins[1]] : ['Learn', 'Home']
 }
 
-const Links = ({ items, onClick }: { items: NavItem[]; onClick?: () => void }) => (
+/** Nav links; the active highlight slides between them (one pill per menu, named by `pill`). */
+const Links = ({ items, onClick, pill = 'nav' }: { items: NavItem[]; onClick?: () => void; pill?: string }) => (
   <>{items.map(([to, label, ic]) => (
     <NavLink key={to} to={to} end={to === '/'} onClick={onClick} title={label}>
-      <span className="nav-icon"><Icon name={ic} /></span><span className="nav-text">{label}</span>
+      {({ isActive }) => <>
+        {isActive && <motion.span layoutId={`pill-${pill}`} className="nav-pill" transition={SPRING} />}
+        <span className="nav-icon" data-tone={TONES[ic] ?? 'gray'}><Icon name={ic} /></span><span className="nav-text">{label}</span>
+      </>}
     </NavLink>))}</>
 )
 
@@ -102,7 +112,7 @@ export default function App() {
   ], [tracks, dark, collapsed, isAdmin, navigate, toggleTheme, logout])
 
   if (!session) return <Routes><Route path="*" element={<Login />} /></Routes>
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) return isAdmin ? <Routes><Route path="/admin/*" element={<AdminApp />} /></Routes> : <Navigate to="/" />
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return isAdmin ? <Suspense fallback={null}><Routes><Route path="/admin/*" element={<AdminApp />} /></Routes></Suspense> : <Navigate to="/" />
 
   const [section, page] = crumbFor(pathname)
   const initial = session.username[0]?.toUpperCase()
@@ -170,6 +180,8 @@ export default function App() {
         </header>
 
         <main key={pathname}>
+          {/* Pages load on first visit; a skeleton holds their place meanwhile */}
+          <Suspense fallback={<Skeleton lines={4} />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/onboarding" element={<Onboarding />} />
@@ -186,11 +198,12 @@ export default function App() {
             <Route path="/usage" element={<Usage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+          </Suspense>
         </main>
       </div>
 
       <nav className="dock" aria-label="Primary">
-        <Links items={learn} />
+        <Links items={learn} pill="dock" />
         <button className={`dock-more ${sheet ? 'active' : ''}`} onClick={() => setSheet(true)} aria-label="More">
           <span className="nav-icon"><Icon name="more" /></span><span className="nav-text">More</span></button>
       </nav>
@@ -199,7 +212,7 @@ export default function App() {
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="dialog" aria-label="More">
           <div className="grab" />
-          <div className="sheet-grid"><Links items={insights} onClick={() => setSheet(false)} /></div>
+          <div className="sheet-grid"><Links items={insights} onClick={() => setSheet(false)} pill="sheet" /></div>
           {tracks.length > 0 && <>
             <div className="nav-label">Tracks</div>
             {tracks.map(t => <Link key={t.id} to={`/roadmap?track=${t.id}`} className="sheet-row" onClick={() => setSheet(false)}>

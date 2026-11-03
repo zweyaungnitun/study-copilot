@@ -4,8 +4,8 @@ import { api, utc, type Schedule, type ScheduledTask, type TaskKind } from '../a
 import { Empty, ErrorBox, Icon, PageHeader, Skeleton, Spinner, useToast, type IconName } from '../ui'
 
 const KIND: Record<TaskKind, [string, IconName, string]> = {
-  learn: ['Learn', 'book', ''], review: ['Review', 'cards', 'gray'], practice: ['Practice', 'target', 'green'],
-  buffer: ['Buffer', 'clock', 'gray'], mock: ['Mock exam', 'exam', 'yellow'],
+  learn: ['Learn', 'book', ''], review: ['Review', 'cards', 'blue'], practice: ['Practice', 'target', 'green'],
+  buffer: ['Buffer', 'clock', 'gray'], mock: ['Mock exam', 'exam', 'rose'],
 }
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 const monday = (d: Date) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x }
@@ -16,7 +16,7 @@ function TaskRow({ t, onSet }: { t: ScheduledTask; onSet: (t: ScheduledTask, s: 
   const [label, icon, tone] = KIND[t.kind] ?? [t.kind, 'list', 'gray']
   const done = t.status === 'done'
   return (
-    <li className={`task ${t.status}`}>
+    <li className={`task ${t.status} kind-${t.kind}`}>
       <input type="checkbox" checked={done} aria-label={`Mark ${t.title} done`} disabled={t.status === 'missed'}
         onChange={() => onSet(t, done ? 'pending' : 'done')} />
       <div className="grow">
@@ -74,9 +74,9 @@ export default function SchedulePage() {
       {err && <ErrorBox>{err}</ErrorBox>}
       {s && <div className="card schedule-summary">
         <p style={{ margin: 0 }}>{s.explanation}</p>
-        {s.over_capacity && <div className="alert err-box"><Icon name="alert" size={16} />
+        {s.over_capacity && <div className="alert warn-box"><Icon name="alert" size={16} />
           About {fmtMin(s.unscheduled_minutes)} of study doesn't fit before your deadline. Try {s.suggested_hours_per_day} h/day, a later deadline, or skip sections.</div>}
-        {missed > 0 && <div className="alert err-box"><Icon name="clock" size={16} /><span className="grow">{missed} task{missed > 1 ? 's' : ''} from earlier days {missed > 1 ? 'are' : 'is'} unfinished.</span>
+        {missed > 0 && <div className="alert warn-box"><Icon name="clock" size={16} /><span className="grow">{missed} task{missed > 1 ? 's' : ''} from earlier days {missed > 1 ? 'are' : 'is'} unfinished.</span>
           <button className="sm" onClick={build} disabled={building}>Re-plan the rest</button></div>}
       </div>}
       {!s && !data?.tasks.length ? (

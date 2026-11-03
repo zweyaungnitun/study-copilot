@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type ResourceLink, type StudyGuide } from '../api'
 import { useLoad } from '../hooks'
+import { celebrate } from '../celebrate'
 import { Empty, ErrorBox, Icon, type IconName, Markdown, PageHeader, ProgressBar, Segmented, Skeleton, Spinner, useToast } from '../ui'
 
 const resourceIcon: Record<string, IconName> = { video: 'spark', article: 'file', docs: 'book', course: 'map', practice: 'target', search: 'search', link: 'arrow' }
@@ -81,6 +82,7 @@ export default function ChapterPage() {
     setBusy('done')
     try {
       const r = await api.completeChapter(id!)
+      celebrate()
       info.setData(r.chapter)
       toast('ok', r.unlocked.length ? `Chapter complete — unlocked: ${r.unlocked.map(u => u.title).join(', ')}` : 'Chapter complete')
     } catch (e) { toast('err', (e as Error).message) } finally { setBusy('') }

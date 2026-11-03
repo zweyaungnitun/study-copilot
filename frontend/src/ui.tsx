@@ -1,4 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useId, type ReactNode } from 'react'
+import { motion } from 'motion/react'
+
+export const SPRING = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 } as const
 
 const PATHS = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
@@ -93,7 +96,8 @@ export function PageHeader({ title, sub, actions, back }: { title: ReactNode; su
 export function Empty({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="card empty">
-      <span className="empty-icon"><Icon name={icon} size={24} /></span>
+      <motion.span className="empty-icon" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}><Icon name={icon} size={24} /></motion.span>
       <h2>{title}</h2>
       {children && <p className="muted">{children}</p>}
       {action}
@@ -111,15 +115,21 @@ export const ErrorBox = ({ children }: { children: ReactNode }) => <div classNam
 
 export const Spinner = () => <span className="spinner" role="status" aria-label="Loading" />
 
-export const Segmented = <T extends string | number>({ value, onChange, options, label }: {
+/** Radio-style toggle; the selection slides between options. */
+export function Segmented<T extends string | number>({ value, onChange, options, label }: {
   value: T; onChange: (v: T) => void; options: [T, string][]; label: string
-}) => (
-  <div className="seg" role="radiogroup" aria-label={label}>
-    {options.map(([v, l]) => (
-      <button type="button" key={String(v)} role="radio" aria-checked={v === value} className={v === value ? 'on' : ''} onClick={() => onChange(v)}>{l}</button>
-    ))}
-  </div>
-)
+}) {
+  const id = useId()
+  return (
+    <div className="seg" role="radiogroup" aria-label={label}>
+      {options.map(([v, l]) => (
+        <button type="button" key={String(v)} role="radio" aria-checked={v === value} className={v === value ? 'on' : ''} onClick={() => onChange(v)}>
+          {v === value && <motion.span layoutId={`seg-${id}`} className="seg-thumb" transition={SPRING} />}
+          <span className="seg-label">{l}</span></button>
+      ))}
+    </div>
+  )
+}
 
 /** Number that counts up from 0 on mount (instant when reduced motion is requested). */
 export function CountUp({ value, duration = 800 }: { value: number; duration?: number }) {

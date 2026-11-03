@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion } from 'motion/react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type BrainMap, type BrainNode } from '../api'
 import { useAuth } from '../auth'
@@ -29,12 +30,15 @@ function Graph({ data }: { data: BrainMap }) {
     <div className="map-wrap">
       <svg width={w} height={h} role="img" aria-label="Topic dependency graph">
         {data.edges.map((e, i) => pos[e.source] && pos[e.target] &&
-          <line key={i} x1={pos[e.source][0]} y1={pos[e.source][1]} x2={pos[e.target][0]} y2={pos[e.target][1]} stroke="var(--line-strong)" strokeWidth={2} strokeLinecap="round" />)}
-        {data.nodes.map(n => (
+          <motion.line key={i} x1={pos[e.source][0]} y1={pos[e.source][1]} x2={pos[e.target][0]} y2={pos[e.target][1]} stroke="var(--line-strong)" strokeWidth={2} strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.15 + i * 0.06, duration: 0.5, ease: 'easeOut' }} />)}
+        {data.nodes.map((n, i) => (
           <g key={n.id} className="node" tabIndex={0} role="link" aria-label={`${n.label}, ${n.status}. Open chapter`} style={{ cursor: 'pointer' }}
             transform={`translate(${pos[n.id][0]},${pos[n.id][1]})`} onClick={() => nav(`/chapters/${n.id}`)} onKeyDown={e => e.key === 'Enter' && nav(`/chapters/${n.id}`)}>
-            <circle r={18} fill={n.color.startsWith('#') ? n.color : COLORS[n.color] ?? COLORS.gray} stroke="var(--surface)" strokeWidth={3}>
-              <title>{`${n.track ? n.track + ' · ' : ''}${n.label}: ${n.status}, retention ${Math.round(n.retention_score * 100)}%`}</title></circle>
+            {n.color === 'red' && <circle r={18} className="node-pulse" />}
+            <motion.circle r={18} fill={n.color.startsWith('#') ? n.color : COLORS[n.color] ?? COLORS.gray} stroke="var(--surface)" strokeWidth={3}
+              initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 + i * 0.07, type: 'spring', stiffness: 400, damping: 15 }}>
+              <title>{`${n.track ? n.track + ' · ' : ''}${n.label}: ${n.status}, retention ${Math.round(n.retention_score * 100)}%`}</title></motion.circle>
             <text y={36} textAnchor="middle" fontSize={11.5} fontWeight={500} fill="var(--text-2)">{n.label.length > 22 ? n.label.slice(0, 21) + '…' : n.label}</text>
           </g>))}
       </svg>
