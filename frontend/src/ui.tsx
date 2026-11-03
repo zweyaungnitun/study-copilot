@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, useId, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useId, type PointerEvent, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 
 export const SPRING = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 } as const
@@ -131,22 +131,58 @@ export function Segmented<T extends string | number>({ value, onChange, options,
   )
 }
 
-/** Number that counts up from 0 on mount (instant when reduced motion is requested). */
-export function CountUp({ value, duration = 800 }: { value: number; duration?: number }) {
+/** Number that counts up from 0 on mount, then glides from the old value when it changes (instant under reduced motion). */
+export function CountUp({ value, duration = 800, format = String }: { value: number; duration?: number; format?: (n: number) => string }) {
   const [n, setN] = useState(0)
+  const shown = useRef(0)
   useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { setN(value); return }
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { shown.current = value; setN(value); return }
     let raf = 0
-    const start = performance.now()
+    const from = shown.current, start = performance.now()
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / duration)
-      setN(Math.round(value * (1 - Math.pow(1 - p, 3))))
+      shown.current = Math.round(from + (value - from) * (1 - Math.pow(1 - p, 3)))
+      setN(shown.current)
       if (p < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [value, duration])
-  return <>{n}</>
+  return <>{format(n)}</>
+}
+
+/** Heading text that rises in word by word. Screen readers get the whole string at once. */
+export function RevealText({ text, delay = 0 }: { text: string; delay?: number }) {
+  return (
+    <span className="reveal" aria-label={text}>
+      {text.split(' ').map((w, i) => (
+        <motion.span key={i} aria-hidden="true" initial={{ opacity: 0, y: '0.45em', filter: 'blur(6px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: delay + i * 0.06 }}>{w}{' '}</motion.span>))}
+    </span>
+  )
+}
+
+/** Slow drifting light behind a dark hero tile (pure decoration; frozen under reduced motion). */
+export const HeroGlow = () => (
+  <div className="hero-glow" aria-hidden="true"><i /><i /><i />
+    <div className="hero-sparks">{Array.from({ length: 6 }, (_, i) => <svg key={i} viewBox="0 0 24 24" width="12" height="12"><path d={PATHS.spark} fill="currentColor" /></svg>)}</div>
+  </div>
+)
+
+/** Pointer handler for a grid of tiles: the tile under the cursor gets a glowing edge that follows it (CSS reads --gx/--gy). */
+export const tileGlow = (e: PointerEvent<HTMLElement>) => {
+  const t = (e.target as HTMLElement).closest<HTMLElement>('.tile')
+  if (!t) return
+  const r = t.getBoundingClientRect()
+  t.style.setProperty('--gx', `${e.clientX - r.left}px`)
+  t.style.setProperty('--gy', `${e.clientY - r.top}px`)
+}
+
+/** Pointer handler for tiles whose soft light follows the cursor (CSS reads --mx/--my). */
+export const spotlight = (e: PointerEvent<HTMLElement>) => {
+  const r = e.currentTarget.getBoundingClientRect()
+  e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`)
+  e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`)
 }
 
 /** Circular progress (0-100). Animates in on mount; children render in the centre. */

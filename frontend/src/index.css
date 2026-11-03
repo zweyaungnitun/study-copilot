@@ -3593,3 +3593,328 @@ input.range:focus-visible::-webkit-slider-thumb { box-shadow: var(--ring); }
 /* Empty days sit on the page, so they are quiet white cards, not wells. */
 .day.day-empty { background: var(--surface); box-shadow: var(--tile-shadow); border-radius: var(--well-r); }
 .day.day-empty header b { color: var(--muted); font-weight: 500; }
+
+/* ==========================================================================
+   Home pages (learner + admin)
+   The hero breathes with slow drifting light, the greeting rises word by word,
+   and progress (today's plan, weekly load, quotas) fills in once it arrives.
+   ========================================================================== */
+.tile-hero > :not(.hero-glow):not(.tile-hero-art) { position: relative; z-index: 1; }
+.tile-hero { animation-name: hero-in !important; animation-duration: 0.8s !important; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+.hero-glow { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.hero-glow i { position: absolute; border-radius: 50%; opacity: 0.55; will-change: transform; }
+.hero-glow i:nth-child(1) { width: 460px; height: 460px; right: -140px; top: -220px; background: radial-gradient(closest-side, rgba(110, 110, 240, 0.55), transparent); animation: glow-a 16s ease-in-out infinite alternate; }
+.hero-glow i:nth-child(2) { width: 380px; height: 380px; left: 30%; bottom: -260px; background: radial-gradient(closest-side, rgba(79, 125, 255, 0.4), transparent); animation: glow-b 20s ease-in-out infinite alternate; }
+.hero-glow i:nth-child(3) { width: 300px; height: 300px; left: -120px; top: -140px; background: radial-gradient(closest-side, rgba(170, 120, 255, 0.3), transparent); animation: glow-c 24s ease-in-out infinite alternate; }
+@keyframes glow-a { to { transform: translate(-120px, 80px) scale(1.15); } }
+@keyframes glow-b { to { transform: translate(140px, -60px) scale(0.9); } }
+@keyframes glow-c { to { transform: translate(90px, 70px) scale(1.2); } }
+
+.reveal > span { display: inline-block; white-space: pre; }
+
+/* Hero status pills (admin) */
+.hero-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 13px; color: rgba(250, 250, 250, 0.72);
+  background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.hero-pill b { color: #fafafa; font-weight: 600; }
+.hero-pill .live-dot { margin: 0 2px 0 0; }
+.tile-hero .row button svg:first-child:not(:last-child) { transform: none; }
+
+/* Stat tiles: label and hint stack under the number */
+.tile-stat > span:not(.tile-icon) { flex-basis: 100%; }
+.tile-stat .tile-stat-hint { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.tone-sky { --s-bg: var(--sky-bg); --s-fg: var(--sky-fg); }
+.tile-stat .tile-icon { transition: transform 0.35s var(--spring), background 0.2s ease; }
+.tile-stat:hover .tile-icon { transform: rotate(-8deg) scale(1.08); background: var(--s-bg); }
+
+/* Today's plan: a thin bar that fills as tasks are ticked off */
+.plan-progress { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.plan-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.6s var(--out); animation: bar-fill 1s var(--out) 0.3s both; transform-origin: left; }
+
+/* Week strip: each day shows its study load as a bar that grows in */
+.week-load { margin-top: auto; height: 4px; border-radius: 99px; background: color-mix(in srgb, currentColor 10%, transparent); overflow: hidden; }
+.week-load::after { content: ''; display: block; height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left; transform: scaleX(var(--load, 0)); animation: load-in 0.9s var(--out) 0.4s both; }
+.week-strip li.today .week-load::after { background: #fafafa; }
+.week-strip li.done .week-load::after { background: var(--mint-fg); }
+.week-strip li.missed .week-load::after { background: var(--peach-fg); }
+.week-strip li:nth-child(2) .week-load::after { animation-delay: 0.45s; } .week-strip li:nth-child(3) .week-load::after { animation-delay: 0.5s; }
+.week-strip li:nth-child(4) .week-load::after { animation-delay: 0.55s; } .week-strip li:nth-child(5) .week-load::after { animation-delay: 0.6s; }
+.week-strip li:nth-child(6) .week-load::after { animation-delay: 0.65s; } .week-strip li:nth-child(7) .week-load::after { animation-delay: 0.7s; }
+@keyframes load-in { from { transform: scaleX(0); } }
+.week-strip li.today { box-shadow: 0 10px 24px -12px rgba(24, 24, 27, 0.5); }
+
+/* Admin: ranked consumers and quiet empty states */
+.consumers { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.consumers li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--well-r); background: var(--well); animation: tile-in 0.45s var(--out) both; transition: background 0.2s ease; }
+.consumers li:hover { background: var(--well-hover); }
+.consumers .quota-meter { margin: 6px 0 0; background: var(--surface); }
+.consumer-rank { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--muted); }
+.consumers li:first-child .consumer-rank { background: var(--ink); color: var(--on-ink); }
+.consumer-line { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+.consumer-line b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quota-meter i { transform-origin: left; animation: bar-fill 1s var(--out) 0.35s both; }
+.tile-quiet { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--well-r); background: var(--well); color: var(--muted); }
+.tile-quiet.ok svg { color: var(--green); }
+.tile-head h2 .live-dot { margin-left: 8px; }
+.tile .list > a.item { transition: background 0.2s ease, transform 0.25s var(--out); }
+.tile .list > a.item:hover { transform: translateX(3px); }
+
+/* Admin backdrop: a faint wash of light behind the console */
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.aurora i { position: absolute; border-radius: 50%; opacity: 0.5; }
+.aurora i:nth-child(1) { width: 640px; height: 640px; right: -200px; top: -280px; background: radial-gradient(closest-side, var(--accent-soft), transparent); animation: glow-a 30s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { width: 520px; height: 520px; left: 10%; bottom: -320px; background: radial-gradient(closest-side, var(--sky-bg), transparent); animation: glow-b 36s ease-in-out infinite alternate; }
+.aurora i:nth-child(3) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-hero, .hero-glow i, .aurora i, .plan-progress i, .week-load::after, .consumers li, .quota-meter i { animation: none !important; }
+  .tile-stat:hover .tile-icon, .tile .list > a.item:hover { transform: none; }
+}
+
+/* ---------- Learner home: livelier tiles ---------- */
+/* Hero: twinkling sparks, streak pill, a sheen across the main button */
+.hero-sparks svg { position: absolute; color: #fff; opacity: 0; animation: twinkle 4.2s ease-in-out infinite; }
+.hero-sparks svg:nth-child(1) { right: 22%; top: 18%; animation-delay: 0.2s; }
+.hero-sparks svg:nth-child(2) { right: 9%; top: 52%; animation-delay: 1.4s; width: 9px; }
+.hero-sparks svg:nth-child(3) { right: 34%; top: 70%; animation-delay: 2.6s; width: 8px; }
+.hero-sparks svg:nth-child(4) { right: 15%; top: 8%; animation-delay: 3.1s; width: 7px; }
+.hero-sparks svg:nth-child(5) { right: 42%; top: 26%; animation-delay: 1.9s; width: 7px; }
+.hero-sparks svg:nth-child(6) { right: 5%; top: 82%; animation-delay: 0.8s; width: 10px; }
+@keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); } 45% { opacity: 0.7; transform: scale(1) rotate(45deg); } 70% { opacity: 0; transform: scale(0.6) rotate(90deg); } }
+.hero-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hero-flame { display: inline-grid; color: #f5a97f; animation: flicker 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
+.tile-hero button.btn-light { position: relative; overflow: hidden; }
+.tile-hero button.btn-light::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.7) 50%, transparent 65%); transform: translateX(-120%); animation: sheen 5s var(--out) 1.6s infinite; }
+@keyframes sheen { 0% { transform: translateX(-120%); } 25%, 100% { transform: translateX(120%); } }
+
+/* Mastery: a slow halo behind the ring and milestone dots that light up in turn */
+.tile-mastery .ring { isolation: isolate; }
+.tile-mastery .ring::before { content: ''; position: absolute; inset: -14px; z-index: -1; border-radius: 50%; opacity: 0.55; filter: blur(14px);
+  background: conic-gradient(from 0deg, var(--accent-soft), color-mix(in srgb, var(--accent) 28%, transparent), var(--accent-soft), color-mix(in srgb, #4f7dff 22%, transparent), var(--accent-soft));
+  animation: orbit 12s linear infinite; }
+.milestones { list-style: none; margin: 4px 0 0; padding: 0; display: flex; gap: 14px; }
+.milestones li { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted-light); animation: tile-in 0.4s var(--out) both; }
+.milestones i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.milestones li.hit { color: var(--text-2); }
+.milestones li.hit i { background: var(--accent); color: #fff; box-shadow: 0 0 0 4px var(--accent-soft); animation: check-pop 0.5s var(--spring) both; animation-delay: inherit; }
+
+/* Tile titles carry a small tinted icon */
+.tile h2:has(.th-icon) { display: inline-flex; align-items: center; gap: 10px; }
+.th-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--s-bg); color: var(--s-fg); transition: transform 0.35s var(--spring); }
+.tile:hover .th-icon { transform: rotate(-8deg) scale(1.08); }
+.tile-empty-art { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: var(--violet-bg); color: var(--violet-fg); animation: float 5s ease-in-out infinite; }
+
+/* Plan rows: kind marked by a colored edge; ticked rows glide to the bottom */
+.plan-item label { position: relative; overflow: hidden; }
+.plan-item label::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--k-fg, var(--accent)); transition: opacity 0.3s ease; }
+.plan-item.done label::before { opacity: 0.25; }
+.plan-item label:hover { background: var(--surface-3); }
+
+/* Tutor: a breathing orb, chips with a spark, and rotating example questions */
+.tile-orb { position: relative; background: var(--accent-gradient-vibrant) !important; color: #fff !important; border-radius: 50% !important; animation: breathe 3.6s ease-in-out infinite; }
+.tile-orb svg { animation: orbit 8s linear infinite; }
+.tile-chip { display: inline-flex; align-items: center; gap: 6px; }
+.tile-chip svg { color: var(--accent); transition: transform 0.3s var(--spring); }
+.tile-chip:hover svg { transform: rotate(90deg) scale(1.2); }
+.tile-ask { transition: box-shadow 0.2s ease, background 0.2s ease; }
+.tile-ask:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 3px var(--accent-soft); background: var(--surface); }
+.tile-ask-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.tile-ask-field input { flex: 1; }
+.tile-ask-hint { position: absolute; left: 0; right: 0; top: 50%; translate: 0 -50%; pointer-events: none; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-ask button:not(:disabled) svg { animation: nudge 1.6s ease-in-out infinite; }
+@keyframes nudge { 0%, 100% { transform: none; } 50% { transform: translateX(3px); } }
+
+/* Stats: a big faded icon drifts in the corner; each icon has its own hover move */
+.tile-stat { position: relative; overflow: hidden; }
+.tile-stat > :not(.tile-watermark) { position: relative; }
+.tile-watermark { position: absolute; right: -18px; bottom: -22px; color: var(--s-fg); opacity: 0.07; transition: transform 0.6s var(--out), opacity 0.3s ease; pointer-events: none; }
+.tile-stat:hover .tile-watermark { transform: rotate(-12deg) scale(1.1) translate(-6px, -4px); opacity: 0.12; }
+.tile-stat::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--s-fg) 10%, transparent) 50%, transparent 70%); transform: translateX(-110%); }
+.tile-stat:hover::after { transform: translateX(110%); transition: transform 0.9s var(--out); }
+.tone-violet.tile-stat:hover .tile-icon svg { transform: rotate(72deg) scale(1.1); }
+.tone-mint.tile-stat:hover .tile-icon svg { transform: rotate(360deg); }
+.tone-rose.tile-stat:hover .tile-icon svg { animation: wiggle 0.5s ease-in-out; }
+.tile-stat .tile-icon svg { transition: transform 0.6s var(--spring); }
+@keyframes wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+
+/* Week: today's day is ringed with a slow pulse */
+.week-strip li.today { position: relative; }
+.week-strip li.today::after { content: ''; position: absolute; inset: -3px; border-radius: 17px; border: 1.5px solid var(--accent); opacity: 0; animation: today-ring 2.8s ease-out infinite; pointer-events: none; }
+@keyframes today-ring { 0% { opacity: 0.6; transform: scale(0.97); } 100% { opacity: 0; transform: scale(1.04); } }
+
+/* Session: live clock ring */
+.session-live { display: flex; align-items: center; gap: 16px; padding: 12px 14px; margin-bottom: 10px; border-radius: var(--well-r); background: var(--accent-soft); animation: tile-in 0.45s var(--out) both; }
+.session-live p { margin: 2px 0 0; font-size: 13px; }
+.session-live b .live-dot { margin-left: 8px; }
+.session-clock { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* Coach: report paragraphs fade in one after another */
+.tile-coach .prose > * { animation: tile-in 0.5s var(--out) both; }
+.tile-coach .prose > :nth-child(2) { animation-delay: 0.08s; } .tile-coach .prose > :nth-child(3) { animation-delay: 0.16s; }
+.tile-coach .prose > :nth-child(4) { animation-delay: 0.24s; } .tile-coach .prose > :nth-child(n+5) { animation-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-sparks svg, .hero-flame, .tile-hero button.btn-light::after, .tile-mastery .ring::before, .milestones li, .milestones li.hit i, .tile-empty-art,
+  .tile-orb, .tile-orb svg, .tile-ask button svg, .week-strip li.today::after, .session-live, .tile-coach .prose > *, .tone-rose.tile-stat:hover .tile-icon svg { animation: none !important; }
+  .hero-sparks svg { opacity: 0.4; }
+  .tile-stat:hover .tile-watermark, .tile-stat:hover .tile-icon svg, .tile:hover .th-icon, .tile-chip:hover svg { transform: none; }
+  .tile-stat:hover::after { transition: none; transform: translateX(-110%); }
+}
+
+/* ---------- Learner home: no track yet ---------- */
+.tile-start { flex-direction: row; align-items: center; gap: 28px; padding: 30px 32px; }
+.tile-start::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(520px circle at 85% 30%, var(--accent-soft), transparent 70%), radial-gradient(360px circle at 60% 110%, var(--sky-bg), transparent 70%); }
+.start-copy { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.start-copy h2 { font-size: clamp(20px, 2.2vw, 26px); letter-spacing: -0.03em; max-width: 22ch; }
+.start-copy > p { margin: 0; max-width: 52ch; }
+.start-eyebrow { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 550; background: var(--accent-soft); color: var(--accent-text); }
+.start-eyebrow svg { animation: orbit 6s linear infinite; }
+.start-steps { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 8px; max-width: 460px; }
+.start-steps li { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--well-r); background: var(--well); animation: tile-in 0.45s var(--out) both; }
+.start-steps li:not(:last-child)::after { content: ''; position: absolute; left: 30px; bottom: -9px; width: 2px; height: 10px; background: var(--line-strong); }
+.start-steps b { display: block; font-weight: 600; font-size: 14px; }
+.start-steps span:not(.start-step-icon) { font-size: 12.5px; color: var(--muted); }
+.start-step-icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); color: var(--text-2); box-shadow: var(--tile-shadow); }
+.start-steps li.done { opacity: 0.75; }
+.start-steps li.done .start-step-icon { background: var(--green); color: #fff; box-shadow: none; }
+.start-steps li.done b { text-decoration: line-through; text-decoration-color: var(--muted-light); }
+.start-steps li.now { background: var(--surface); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent), 0 8px 20px -12px rgba(24, 24, 27, 0.25); }
+.start-steps li.now .start-step-icon { background: var(--accent); color: #fff; box-shadow: 0 0 0 4px var(--accent-soft); animation: breathe 3.6s ease-in-out infinite; }
+.tile-start .row { margin-top: 4px; gap: 10px; }
+.tile-start .row button svg:last-child { transition: transform 0.2s var(--out); }
+.tile-start .row button:hover svg:last-child { transform: translateX(3px); }
+
+.start-art { position: relative; flex: 0 1 400px; min-width: 0; aspect-ratio: 400 / 240; }
+.start-art svg { overflow: visible; }
+.start-route-bg { fill: none; stroke: var(--surface-3); stroke-width: 10; stroke-linecap: round; }
+.start-route { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: route-draw 2s var(--out) 0.3s forwards; }
+@keyframes route-draw { to { stroke-dashoffset: 0; } }
+.start-stop { transform-box: fill-box; transform-origin: center; animation: stop-pop 0.5s var(--spring) both; }
+.start-stop circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.start-stop:first-of-type circle { fill: var(--accent); }
+.start-stop text { font: 600 11px var(--font-sans); fill: var(--accent-text); }
+.start-stop:first-of-type text { fill: #fff; }
+@keyframes stop-pop { from { opacity: 0; transform: scale(0); } }
+.start-flag path { fill: none; stroke: var(--text-2); stroke-width: 2; stroke-linejoin: round; }
+.start-flag path:last-child { fill: var(--peach-fg); stroke: var(--peach-fg); }
+.start-flag { animation: fade-up 0.5s var(--out) 1.6s both; }
+@keyframes fade-up { from { opacity: 0; } }
+.start-runner { fill: var(--accent); filter: drop-shadow(0 0 6px var(--glow-accent)); offset-distance: 0%; animation: run 5s var(--out) 2s infinite; }
+@keyframes run { 0% { offset-distance: 0%; opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+.start-card { position: absolute; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 550; white-space: nowrap;
+  background: var(--surface); color: var(--text-2); box-shadow: var(--tile-lift); animation: tile-in 0.5s var(--out) both, pv-float 6s ease-in-out infinite; }
+.start-card svg { color: var(--accent); }
+.start-card.c1 { left: 2%; top: 58%; animation-delay: 0.8s, 0s; }
+.start-card.c2 { left: 30%; top: 14%; animation-delay: 1.1s, -2s; }
+.start-card.c3 { right: 0; top: 50%; animation-delay: 1.4s, -4s; }
+@container page (max-width: 760px) {
+  .tile-start { flex-direction: column; align-items: stretch; padding: 24px; }
+  .start-art { flex: none; width: 100%; max-width: 400px; align-self: center; order: -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-eyebrow svg, .start-steps li, .start-steps li.now .start-step-icon, .start-stop, .start-flag, .start-card { animation: none !important; }
+  .start-route { animation: none !important; stroke-dashoffset: 0; stroke-dasharray: none; }
+  .start-runner { display: none; }
+}
+
+/* ==========================================================================
+   Polish
+   Depth and light on top of the neutral system: an ambient wash and dot grid
+   behind the app, tiles with layered shadows and a cursor-following edge glow,
+   a deep indigo hero, tactile primary buttons and an accented navigation.
+   ========================================================================== */
+:root {
+  --tile-shadow: 0 0 0 1px rgba(24, 24, 27, 0.06), 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px -16px rgba(24, 24, 27, 0.12);
+  --tile-lift: 0 0 0 1px rgba(24, 24, 27, 0.08), 0 2px 4px rgba(24, 24, 27, 0.04), 0 18px 36px -18px rgba(24, 24, 27, 0.25);
+  --hero-bg: radial-gradient(120% 140% at 100% 0%, #2b2766 0%, transparent 55%), radial-gradient(90% 120% at 0% 100%, #1d2a55 0%, transparent 60%), linear-gradient(135deg, #17162a, #121218);
+  --wash-a: color-mix(in srgb, var(--accent) 11%, transparent);
+  --wash-b: color-mix(in srgb, #4f7dff 8%, transparent);
+  --dot: rgba(24, 24, 27, 0.07);
+}
+:root[data-theme='dark'] {
+  --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -18px rgba(0, 0, 0, 0.9);
+  --tile-lift: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.12), 0 18px 40px -18px rgba(0, 0, 0, 0.95);
+  --wash-a: color-mix(in srgb, var(--accent) 14%, transparent); --wash-b: color-mix(in srgb, #4f7dff 10%, transparent); --dot: rgba(255, 255, 255, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -18px rgba(0, 0, 0, 0.9);
+    --tile-lift: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.12), 0 18px 40px -18px rgba(0, 0, 0, 0.95);
+    --wash-a: color-mix(in srgb, var(--accent) 14%, transparent); --wash-b: color-mix(in srgb, #4f7dff 10%, transparent); --dot: rgba(255, 255, 255, 0.05);
+  }
+}
+::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* Ambient wash and a dot grid that fades out down the page */
+.shell::before, .shell::after { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.shell::before { background: radial-gradient(900px 520px at 72% -12%, var(--wash-a), transparent 70%), radial-gradient(700px 420px at 8% -8%, var(--wash-b), transparent 70%); }
+.shell::after { background: radial-gradient(var(--dot) 1px, transparent 1.2px) 0 0 / 22px 22px; -webkit-mask: linear-gradient(#000, transparent 420px); mask: linear-gradient(#000, transparent 420px); }
+.shell.admin::before { background: none; }
+
+/* Tiles: depth, a faint top sheen in dark, and an edge that lights up under the cursor */
+:root[data-theme='dark'] .tile:not(.tile-hero), :root[data-theme='dark'] .card { background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px), var(--surface); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .tile:not(.tile-hero), :root:not([data-theme='light']) .card { background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px), var(--surface); } }
+.bento > .tile { transition: transform 0.35s var(--out), box-shadow 0.35s var(--out); }
+.bento > .tile:not(.tile-hero):not(.tile-start)::before {
+  content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0; transition: opacity 0.3s ease;
+  background: radial-gradient(240px circle at var(--gx, -999px) var(--gy, -999px), color-mix(in srgb, var(--accent) 75%, transparent), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.bento > .tile:hover::before { opacity: 1; }
+.bento > .tile:not(.tile-hero):not(.tile-start):hover { box-shadow: var(--tile-lift); }
+
+/* Hero: deep indigo in both themes (it was losing its color to the generic tile surface in light mode) */
+.bento > .tile.tile-hero { background: var(--hero-bg); color: var(--on-ink); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset, 0 24px 48px -24px rgba(43, 39, 102, 0.6); }
+.tile-hero::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 32px 32px, linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 32px 32px;
+  -webkit-mask: radial-gradient(70% 90% at 85% 10%, #000, transparent 70%); mask: radial-gradient(70% 90% at 85% 10%, #000, transparent 70%); }
+.tile-hero h1 { background: linear-gradient(180deg, #ffffff 30%, #c9c6ff); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 0.06em; }
+.tile-hero h1 .reveal > span { -webkit-text-fill-color: transparent; background: inherit; -webkit-background-clip: text; background-clip: text; }
+.tile-hero .tile-next { padding: 12px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); align-self: flex-start; }
+.tile-hero .tile-next p { color: rgba(250, 250, 250, 0.6); }
+button.btn-light { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 20px -8px rgba(0, 0, 0, 0.6); }
+button.btn-outline-light { border-color: rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* Primary buttons: tactile, with a top highlight and a soft drop */
+.bento button:not(.ghost):not(.btn-light):not(.btn-outline-light):not([role='radio']):not(:disabled) {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 60%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(24, 24, 27, 0.2), 0 8px 18px -10px rgba(24, 24, 27, 0.55);
+}
+.bento button:not(:disabled):hover { translate: 0 -1px; }
+.bento button.ghost { background: var(--surface); box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgba(24, 24, 27, 0.05); border-color: transparent; }
+
+/* Stats: a wash of their own color from the corner */
+.bento > .tile-stat { background: radial-gradient(120% 140% at 0% 0%, var(--s-bg), transparent 60%), var(--surface); }
+.tile-stat .tile-icon { background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 4px 10px -6px rgba(24, 24, 27, 0.25); }
+
+/* Mastery ring: the progress stroke glows */
+.tile-mastery .ring-fg { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent)); }
+.tile-mastery .ring.green .ring-fg { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--green) 45%, transparent)); }
+.tile-mastery .ring-label b { background: linear-gradient(180deg, var(--text), color-mix(in srgb, var(--text) 55%, var(--accent))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Week: today's card matches the hero */
+.week-strip li.today { background: var(--hero-bg); box-shadow: 0 12px 26px -14px rgba(43, 39, 102, 0.8); }
+
+/* Navigation: accent on the active item, glassy chrome */
+.nav { background: color-mix(in srgb, var(--sidebar-bg) 70%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.nav-pill { background: linear-gradient(90deg, var(--accent-soft), transparent 70%), var(--surface); }
+.nav-pill::before { content: ''; position: absolute; left: 0; top: 50%; width: 3px; height: 16px; translate: 0 -50%; border-radius: 0 3px 3px 0; background: var(--accent); }
+.dock .nav-pill::before, .sheet-grid .nav-pill::before { display: none; }
+.nav a.active .nav-icon { color: var(--accent); }
+.topbar.scrolled::before { box-shadow: 0 1px 0 var(--line), 0 10px 30px -20px rgba(24, 24, 27, 0.35); }
+.brand-mark { transition: transform 0.5s var(--spring); }
+.brand-link:hover .brand-mark { transform: rotate(-8deg) scale(1.06); }
+.avatar { background: var(--accent-gradient-vibrant); color: #fff; }
+
+/* No-track tile: the art sits on a soft spotlight */
+.tile-start { background: radial-gradient(60% 90% at 80% 40%, var(--accent-soft), transparent 70%), var(--surface); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bento button:not(:disabled):hover { translate: none; }
+  .brand-link:hover .brand-mark { transform: none; }
+}
+@container page (max-width: 560px) { .bento > .tile-stat { grid-column: span 6; padding: 16px; } .tile-stat b { font-size: 24px; } .tile-watermark { display: none; } }

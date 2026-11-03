@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth'
-import { Brand, Icon, applyTheme, initialTheme, type IconName, type Theme } from '../ui'
+import { motion } from 'motion/react'
+import { Brand, Icon, SPRING, applyTheme, initialTheme, type IconName, type Theme } from '../ui'
 import AdminOverview from './AdminOverview'
 import AdminProctoring from './AdminProctoring'
 import AdminMaterials from './AdminMaterials'
@@ -14,16 +15,26 @@ const items: NavItem[] = [
   ['/admin/tokens', 'Token management', 'coins'], ['/admin/materials', 'Materials', 'book'], ['/admin/users', 'Users & roles', 'users'],
 ]
 
-const Links = () => <>{items.map(([to, label, ic]) => (
+/** Admin nav links; the active highlight slides between them (one pill per menu, named by `pill`). */
+const Links = ({ pill = 'admin' }: { pill?: string }) => <>{items.map(([to, label, ic]) => (
   <NavLink key={to} to={to} end={to === '/admin'} title={label}>
-    <span className="nav-icon"><Icon name={ic} /></span><span className="nav-text">{label}</span></NavLink>))}</>
+    {({ isActive }) => <>
+      {isActive && <motion.span layoutId={`pill-${pill}`} className="nav-pill" transition={SPRING} />}
+      <span className="nav-icon"><Icon name={ic} /></span><span className="nav-text">{label}</span>
+    </>}</NavLink>))}</>
 
 /** The admin site: its own shell and navigation, mounted at /admin for admin accounts. */
 export default function AdminApp() {
   const { session, logout } = useAuth()
   const { pathname } = useLocation()
   const [theme, setTheme] = useState<Theme>(initialTheme())
+  const [scrolled, setScrolled] = useState(false)
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  useEffect(() => {
+    const h = () => setScrolled(window.scrollY > 8)
+    h(); window.addEventListener('scroll', h, { passive: true })
+    return () => window.removeEventListener('scroll', h)
+  }, [])
   const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
   const toggleTheme = () => { const t: Theme = dark ? 'light' : 'dark'; setTheme(t); applyTheme(t) }
   const page = items.find(([to]) => to === pathname)?.[1] ?? 'Dashboard'
@@ -48,7 +59,7 @@ export default function AdminApp() {
       </nav>
 
       <div className="frame">
-        <header className="topbar">
+        <header className={`topbar ${scrolled ? 'scrolled' : ''}`}>
           <div className="topbar-left">
             <Link to="/admin" className="topbar-brand" aria-label="Admin home"><Brand /></Link>
             <nav className="crumbs" aria-label="Breadcrumb"><span>Admin</span><Icon name="chevron" size={14} /><b>{page}</b></nav>
@@ -70,7 +81,7 @@ export default function AdminApp() {
         </main>
       </div>
 
-      <nav className="dock" aria-label="Admin sections"><Links /></nav>
+      <nav className="dock" aria-label="Admin sections"><Links pill="admin-dock" /></nav>
     </div>
   )
 }
