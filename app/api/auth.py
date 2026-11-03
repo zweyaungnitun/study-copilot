@@ -40,6 +40,7 @@ async def register(request: UserRegisterRequest, db: AsyncSession = Depends(get_
         email=request.email,
         password_hash=hash_password(request.password),
         role="student",
+        ai_enabled=settings.DEFAULT_AI_ACCESS,
     )
     db.add(user)
     await db.flush()

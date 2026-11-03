@@ -11,6 +11,24 @@ export default function Usage() {
   if (loading) return <>{head}<Skeleton lines={4} /></>
   if (error || !data) return <>{head}<ErrorBox>{error}</ErrorBox></>
   const q = data.quota
+  if (!q.ai_access) return (
+    <>
+      {head}
+      <section className="card quota-hero">
+        <ProgressRing value={0} size={104} stroke={10} tone="spark" label="No AI tokens available"><b className="num">0</b></ProgressRing>
+        <div className="grow">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h2 style={{ margin: 0 }}>No AI tokens yet</h2>
+            <span className="badge yellow"><Icon name="alert" size={12} />Waiting for access</span>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            Your account doesn't have any AI tokens to use. An admin has to grant you AI access before the tutor, notes,
+            mock exams, material uploads and other AI features work. Your roadmap, schedule and progress are still available.</p>
+          <div className="alert warn-box"><Icon name="alert" size={16} />Ask an admin to grant your account AI access. This page updates once they do.</div>
+        </div>
+      </section>
+    </>
+  )
   const state = q.unlimited ? 'Unlimited plan' : q.percent >= 100 ? 'Limit reached' : q.percent >= 80 ? 'Running low' : 'Plenty left'
 
   return (

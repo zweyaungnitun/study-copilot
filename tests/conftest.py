@@ -102,6 +102,13 @@ def isolated_storage(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def ai_access_by_default(monkeypatch):
+    """Most tests exercise AI features, so new accounts start with access; access tests turn this off."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "DEFAULT_AI_ACCESS", True)
+
+
+@pytest.fixture(autouse=True)
 def metering_uses_test_db(request, monkeypatch):
     """Token metering opens its own sessions; point them at the test database when a test has one."""
     if "db_session" not in request.fixturenames and "client" not in request.fixturenames:

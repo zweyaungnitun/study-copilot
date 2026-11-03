@@ -20,6 +20,7 @@ class AdminStats(BaseModel):
     tokens_today: int
     users_over_quota: int
     users_near_quota: int
+    users_without_ai: int = 0
     default_token_limit: int
 
 
@@ -34,6 +35,8 @@ class AdminUserRow(BaseModel):
     custom_limit: bool
     percent: float
     exams_taken: int
+    ai_access: bool = False    # effective: admins always have it
+    ai_enabled: bool = False   # the admin-granted flag itself
     pages_used: int = 0
     page_limit: int = 0        # effective storage cap in pages, 0 = unlimited
     custom_page_limit: bool = False
@@ -53,6 +56,8 @@ class AdminUserUpdate(BaseModel):
     token_limit: Optional[int] = Field(default=None, ge=0)
     # Same convention for the storage cap (pages): int overrides, null restores the default.
     storage_page_limit: Optional[int] = Field(default=None, ge=0)
+    # Grant (true) or revoke (false) the user's AI access.
+    ai_enabled: Optional[bool] = None
 
 
 class TokenSettings(BaseModel):

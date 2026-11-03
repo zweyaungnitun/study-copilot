@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     # Admin: usernames promoted to the admin role on register/login (bootstrap the first admin)
     ADMIN_USERNAMES: List[str] = []
+    # AI access: new accounts can't use AI features until an admin grants it (True skips that approval step)
+    DEFAULT_AI_ACCESS: bool = False
 
     # LLM token quotas: monthly budget per user unless an admin overrides it (0 = unlimited)
     DEFAULT_MONTHLY_TOKEN_LIMIT: int = 500_000

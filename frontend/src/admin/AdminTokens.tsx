@@ -27,6 +27,26 @@ function LimitEditor({ user, onSaved }: { user: AdminUser; onSaved: (u: AdminUse
   )
 }
 
+/** Grant or revoke a user's AI access. Admins always have it. */
+function AccessToggle({ user, onSaved }: { user: AdminUser; onSaved: (u: AdminUser) => void }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  if (user.role === 'admin') return <span className="badge green"><Icon name="check" size={12} />Always</span>
+  const save = async (on: boolean) => {
+    setBusy(true)
+    try { const u = await admin.updateUser(user.id, { ai_enabled: on }); onSaved(u); toast('ok', on ? `${u.username} can now use AI features` : `AI access revoked for ${u.username}`) }
+    catch (e) { toast('err', (e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+      <span className={`badge ${user.ai_enabled ? 'green' : 'yellow'}`}>{user.ai_enabled ? 'Granted' : 'No access'}</span>
+      <button className={`sm ${user.ai_enabled ? 'ghost' : ''}`} disabled={busy} onClick={() => save(!user.ai_enabled)}
+        aria-label={`${user.ai_enabled ? 'Revoke' : 'Grant'} AI access for ${user.username}`}>{user.ai_enabled ? 'Revoke' : 'Grant'}</button>
+      {busy && <Spinner />}
+    </div>
+  )
+}
+
 export default function AdminTokens() {
   const toast = useToast()
   const [days, setDays] = useState(30)
@@ -34,7 +54,7 @@ export default function AdminTokens() {
   const [def, setDef] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [q, setQ] = useState('')
-  const head = <PageHeader title="Token management" sub="Monthly AI token budgets per user, and where the tokens go."
+  const head = <PageHeader title="Token management" sub="Who can use AI features, their monthly token budgets, and where the tokens go."
     actions={<Segmented label="Range" value={days} onChange={setDays} options={[[14, '14d'], [30, '30d'], [90, '90d']]} />} />
   if (loading && !data) return <>{head}<Skeleton lines={6} /></>
   if (error || !data) return <>{head}<ErrorBox>{error}</ErrorBox></>
@@ -52,6 +72,7 @@ export default function AdminTokens() {
   }
   const updateRow = (u: AdminUser) => setData({ ...data, users: data.users.map(x => x.id === u.id ? u : x) })
   const over = data.users.filter(u => u.token_limit && u.tokens_used >= u.token_limit).length
+  const waiting = data.users.filter(u => !u.ai_access).length
   const users = data.users.filter(u => !q || u.username.toLowerCase().includes(q.toLowerCase()))
 
   return (
@@ -60,6 +81,7 @@ export default function AdminTokens() {
       <div className="stats">
         <Stat icon="coins" value={compact(data.total_tokens)} label="Tokens this month" hint={<>{data.total_calls.toLocaleString()} model calls</>} />
         <Stat icon="alert" tone={over ? 'red' : 'green'} value={over} label="Users at their limit" />
+        <Stat icon="users" tone={waiting ? 'red' : 'green'} value={waiting} label="Without AI access" hint="grant access in the table below" />
         <Stat icon="clock" value={utc(data.resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} label="Quotas reset"
           hint={<>period began {utc(data.period_start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</>} />
         <Stat icon="users" value={compact(data.unattributed_tokens)} label="Unattributed tokens" hint="calls without a signed-in user" />
@@ -89,10 +111,11 @@ export default function AdminTokens() {
         <div className="card-head" style={{ padding: '20px 20px 0' }}><h2>Per-user budgets</h2>
           <div className="table-search"><Icon name="search" size={16} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter users" aria-label="Filter users" /></div></div>
         <table className="table">
-          <thead><tr><th>User</th><th>Used this month</th><th>Limit</th><th>Set custom limit</th></tr></thead>
+          <thead><tr><th>User</th><th>AI access</th><th>Used this month</th><th>Limit</th><th>Set custom limit</th></tr></thead>
           <tbody>{users.map(u => (
             <tr key={u.id}>
               <td><b>{u.username}</b>{u.role === 'admin' && <span className="badge" style={{ marginLeft: 6 }}>admin</span>}</td>
+              <td><AccessToggle user={u} onSaved={updateRow} /></td>
               <td style={{ minWidth: 180 }}>
                 <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}><span className="num">{compact(u.tokens_used)}</span>
                   <span className="muted num">{u.token_limit ? `${Math.round(u.percent)}%` : '—'}</span></div>

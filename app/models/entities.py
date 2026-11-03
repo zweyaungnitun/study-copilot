@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     JSON,
 )
+from sqlalchemy import false
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -35,6 +36,7 @@ class User(Base):
     role = Column(String(20), nullable=False, default="student", server_default="student")  # student, admin
     token_limit = Column(Integer, nullable=True)  # monthly LLM token budget; None = platform default, 0 = unlimited
     storage_page_limit = Column(Integer, nullable=True)  # pages across all materials; None = default, 0 = unlimited
+    ai_enabled = Column(Boolean, nullable=False, default=False, server_default=false())  # AI access granted by an admin
     created_at = Column(DateTime, default=utcnow)
 
     # Relationships

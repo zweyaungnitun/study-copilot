@@ -49,6 +49,7 @@ async def _user_rows(db: AsyncSession, users: List[User]) -> List[AdminUserRow]:
             tokens_used=tokens, token_limit=limit, custom_limit=u.token_limit is not None,
             percent=0.0 if limit == 0 else round(min(100.0, tokens / limit * 100), 1),
             exams_taken=exams.get(u.id, 0),
+            ai_access=UsageService.has_ai_access(u), ai_enabled=bool(u.ai_enabled),
             pages_used=pages.get(u.id, 0),
             page_limit=u.storage_page_limit if u.storage_page_limit is not None else default_pages,
             custom_page_limit=u.storage_page_limit is not None,
@@ -106,6 +107,7 @@ async def overview(db: AsyncSession = Depends(get_db)):
             "tokens_today": int(tokens_today),
             "users_over_quota": sum(1 for r in rows if r.token_limit and r.tokens_used >= r.token_limit),
             "users_near_quota": sum(1 for r in rows if r.token_limit and NEAR_QUOTA_PERCENT <= r.percent < 100),
+            "users_without_ai": sum(1 for r in rows if not r.ai_access),
             "default_token_limit": await UsageService.default_limit(db),
         },
         daily_tokens=await UsageService.daily(db, 14),
@@ -128,7 +130,7 @@ async def list_users(q: Optional[str] = None, db: AsyncSession = Depends(get_db)
 @router.patch("/users/{user_id}", response_model=AdminUserRow)
 async def update_user(user_id: str, body: AdminUserUpdate, admin: User = Depends(require_admin),
                       db: AsyncSession = Depends(get_db)):
-    """Change a user's role and/or token limit. ``token_limit: null`` restores the platform default."""
+    """Change a user's role, AI access and/or limits. ``token_limit: null`` restores the platform default."""
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -142,6 +144,8 @@ async def update_user(user_id: str, body: AdminUserUpdate, admin: User = Depends
         user.token_limit = body.token_limit
     if "storage_page_limit" in body.model_fields_set:
         user.storage_page_limit = body.storage_page_limit
+    if body.ai_enabled is not None:
+        user.ai_enabled = body.ai_enabled
     await db.flush()
     return (await _user_rows(db, [user]))[0]
 

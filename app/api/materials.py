@@ -29,6 +29,7 @@ from app.services import extraction, jobs, library, web_source
 from app.services.rag_service import RAGService
 from app.services.storage import get_storage
 from app.services.storage_quota import StorageQuota
+from app.services.usage_service import UsageService
 
 logger = logging.getLogger("studypilot.materials")
 router = APIRouter(prefix="/materials", tags=["Materials & Ingestion"])
@@ -82,6 +83,7 @@ async def upload_material(
     """
     if user_id and user_id != user.id:
         raise HTTPException(status_code=403, detail="You can only upload to your own library")
+    UsageService.require_ai_access(user)
     filename = os.path.basename(file.filename or "upload")[:255] or "upload"
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(filename)[1])
@@ -141,6 +143,7 @@ async def add_web_source(request: MaterialFromUrl, response: Response, user: Use
     and outlined, one section per web page. Re-indexing fetches them again. Adding the same link again
     returns the existing material (200, ``duplicate: true``).
     """
+    UsageService.require_ai_access(user)
     try:
         url = web_source.normalize_url(request.url)
     except web_source.WebSourceError as e:

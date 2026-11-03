@@ -11,6 +11,7 @@ class QuotaStatus(BaseModel):
     percent: float
     unlimited: bool
     custom_limit: bool
+    ai_access: bool = True
     period_start: datetime
     resets_at: datetime
 

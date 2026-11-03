@@ -147,16 +147,16 @@ export interface Attempt { id: string; user_id: string; username: string; title:
 export interface ProctorEvent { id: string; type: string; detail?: string | null; weight: number; created_at: string }
 
 /* ---------- Token usage ---------- */
-export interface Quota { used: number; limit: number; remaining: number | null; percent: number; unlimited: boolean; custom_limit: boolean; period_start: string; resets_at: string }
+export interface Quota { used: number; limit: number; remaining: number | null; percent: number; unlimited: boolean; custom_limit: boolean; ai_access: boolean; period_start: string; resets_at: string }
 export interface DailyUsage { date: string; tokens: number; calls: number }
 export interface UsageSlice { key: string; tokens: number; calls: number }
 export interface MyUsage { quota: Quota; daily: DailyUsage[]; by_feature: UsageSlice[] }
 
 /* ---------- Admin ---------- */
-export interface AdminUser { id: string; username: string; email?: string | null; role: 'student' | 'admin'; created_at: string; tokens_used: number; token_limit: number; custom_limit: boolean; percent: number; exams_taken: number; pages_used: number; page_limit: number; custom_page_limit: boolean }
+export interface AdminUser { id: string; username: string; email?: string | null; role: 'student' | 'admin'; created_at: string; tokens_used: number; token_limit: number; custom_limit: boolean; percent: number; exams_taken: number; ai_access: boolean; ai_enabled: boolean; pages_used: number; page_limit: number; custom_page_limit: boolean }
 export interface AdminMaterial extends Material { username: string }
 export interface AdminMaterialsReport { default_page_limit: number; total_pages: number; counts: Record<string, number>; materials: AdminMaterial[] }
-export interface AdminStats { total_users: number; new_users_7d: number; active_users_7d: number; admins: number; exams_total: number; exams_live: number; exams_flagged_unreviewed: number; avg_integrity_30d: number | null; tokens_this_period: number; tokens_today: number; users_over_quota: number; users_near_quota: number; default_token_limit: number }
+export interface AdminStats { total_users: number; new_users_7d: number; active_users_7d: number; admins: number; exams_total: number; exams_live: number; exams_flagged_unreviewed: number; avg_integrity_30d: number | null; tokens_this_period: number; tokens_today: number; users_over_quota: number; users_near_quota: number; users_without_ai: number; default_token_limit: number }
 export interface AdminOverview { stats: AdminStats; daily_tokens: DailyUsage[]; top_consumers: AdminUser[]; recent_flagged: Attempt[]; live_exams: Attempt[] }
 export interface AdminTokenReport { period_start: string; resets_at: string; default_monthly_limit: number; total_tokens: number; total_calls: number; unattributed_tokens: number; daily: DailyUsage[]; by_feature: UsageSlice[]; by_model: UsageSlice[]; users: AdminUser[] }
 
@@ -164,7 +164,7 @@ export const admin = {
   overview: () => get<AdminOverview>('/admin/overview'),
   users: (q?: string) => get<AdminUser[]>('/admin/users' + qs({ q: q || undefined })),
   /** token_limit: number overrides the default (0 = unlimited); null restores the platform default. */
-  updateUser: (id: string, b: { role?: 'student' | 'admin'; token_limit?: number | null; storage_page_limit?: number | null }) => patch<AdminUser>(`/admin/users/${id}`, b),
+  updateUser: (id: string, b: { role?: 'student' | 'admin'; token_limit?: number | null; storage_page_limit?: number | null; ai_enabled?: boolean }) => patch<AdminUser>(`/admin/users/${id}`, b),
   materials: (status?: string) => get<AdminMaterialsReport>('/admin/materials' + qs({ status })),
   reindexMaterial: (id: string) => post<Material>(`/admin/materials/${id}/reindex`),
   deleteMaterial: (id: string) => request<void>(`/admin/materials/${id}`, { method: 'DELETE' }),

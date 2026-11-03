@@ -18,6 +18,7 @@ class RequestActor:
     feature: str = "other"
     quota_checked: bool = False
     over_quota: bool = False
+    no_access: bool = False            # an admin hasn't granted this user AI access
     limit: int = 0
     trace_id: Optional[str] = None     # Langfuse trace shared by every LLM call in this request
     session_id: Optional[str] = None   # Langfuse session (e.g. a tutor chat)

@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from app.core.config import settings
 from app.core.request_context import RequestActor, current_actor
 from app.core.security import generate_token, verify_token
-from app.services.usage_service import QuotaExceeded, UsageService
+from app.services.usage_service import AIAccessDenied, QuotaExceeded, UsageService
 
 
 @pytest.fixture
@@ -158,3 +158,46 @@ async def test_token_metering_and_quota(client: AsyncClient, monkeypatch, meteri
     report = (await client.get("/api/admin/tokens", headers=_auth(admin))).json()
     assert report["total_tokens"] == 1000 and report["by_model"][0]["key"] == "gemini-test"
     assert report["users"][0]["username"] == "heavy_user"
+
+
+@pytest.mark.asyncio
+async def test_ai_access_requires_admin_grant(client: AsyncClient, monkeypatch, metering):
+    from app.services.llm_client import llm_client
+    monkeypatch.setattr(settings, "DEFAULT_AI_ACCESS", False)
+    monkeypatch.setattr(settings, "ADMIN_USERNAMES", ["access_admin"])
+    monkeypatch.setattr(type(llm_client), "is_live", property(lambda self: True))
+    admin = await _register(client, "access_admin")
+    student = await _register(client, "new_student")
+
+    async def model_call(user_id: str):
+        token = current_actor.set(RequestActor(user_id=user_id, feature="tutor"))
+        try:
+            await UsageService.ensure_quota()
+        finally:
+            current_actor.reset(token)
+
+    # A new student has no AI access: model calls and uploads are refused with a clear message.
+    me = (await client.get("/api/usage/me", headers=_auth(student))).json()
+    assert me["quota"]["ai_access"] is False
+    with pytest.raises(AIAccessDenied):
+        await model_call(student["user_id"])
+    r = await client.post("/api/materials/upload", files={"file": ("notes.txt", b"hello", "text/plain")}, headers=_auth(student))
+    assert r.status_code == 403 and "AI access" in r.json()["detail"]
+    await model_call(admin["user_id"])  # admins always have access
+
+    rows = {u["username"]: u for u in (await client.get("/api/admin/users", headers=_auth(admin))).json()}
+    assert rows["new_student"]["ai_access"] is False and rows["access_admin"]["ai_access"] is True
+
+    # The admin grants access; the student can now call the model. Revoking blocks them again.
+    r = await client.patch(f"/api/admin/users/{student['user_id']}", json={"ai_enabled": True}, headers=_auth(admin))
+    assert r.json()["ai_access"] is True
+    await model_call(student["user_id"])
+    assert (await client.get("/api/usage/me", headers=_auth(student))).json()["quota"]["ai_access"] is True
+
+    await client.patch(f"/api/admin/users/{student['user_id']}", json={"ai_enabled": False}, headers=_auth(admin))
+    with pytest.raises(AIAccessDenied):
+        await model_call(student["user_id"])
+
+    # Students can't grant themselves access.
+    r = await client.patch(f"/api/admin/users/{student['user_id']}", json={"ai_enabled": True}, headers=_auth(student))
+    assert r.status_code == 403

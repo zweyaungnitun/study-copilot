@@ -95,6 +95,16 @@ export default function App() {
     return () => { live = false }
   }, [uid, pathname])
 
+  // Students need an admin to grant AI access; re-checked on navigation until it's granted.
+  const [noAI, setNoAI] = useState<boolean | null>(null)
+  useEffect(() => { setNoAI(null) }, [uid])
+  useEffect(() => {
+    if (!uid || isAdmin || noAI === false) return
+    let live = true
+    api.myUsage(7).then(u => live && setNoAI(!u.quota.ai_access)).catch(() => {})
+    return () => { live = false }
+  }, [uid, isAdmin, pathname, noAI])
+
   const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
   const toggleTheme = useCallback(() => { const t: Theme = dark ? 'light' : 'dark'; setTheme(t); applyTheme(t) }, [dark])
   const togglePalette = useCallback(() => setPalette(p => !p), [])
@@ -181,6 +191,10 @@ export default function App() {
 
         <main key={pathname}>
           {/* Pages load on first visit; a skeleton holds their place meanwhile */}
+          {noAI && pathname !== '/usage' && <div className="alert warn-box" role="status" style={{ marginBottom: 16 }}>
+            <Icon name="alert" size={16} /><span><b>No AI tokens yet.</b> An admin hasn't granted your account AI access, so the tutor, notes,
+              exams and other AI features won't work until they do.</span>
+            <button className="sm ghost" onClick={() => navigate('/usage')}>Details</button></div>}
           <Suspense fallback={<Skeleton lines={4} />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />

@@ -33,6 +33,15 @@ class QuotaExceeded(HTTPException):
         )
 
 
+class AIAccessDenied(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have any AI tokens yet. An admin needs to grant your account AI access "
+                   "before you can use the tutor, notes and other AI features.",
+        )
+
+
 class UsageService:
     # Metering writes outside the request's session (the LLM client has none); tests may swap this.
     session_factory = AsyncSessionLocal
@@ -62,6 +71,18 @@ class UsageService:
             db.add(AppSetting(key=DEFAULT_LIMIT_KEY, value=limit))
         await db.flush()
 
+    @staticmethod
+    def has_ai_access(user: User) -> bool:
+        """Admins always have AI access; everyone else needs an admin to grant it."""
+        return user.role == "admin" or bool(user.ai_enabled)
+
+    @classmethod
+    def require_ai_access(cls, user: User) -> None:
+        """Refuse up front when the request would need the model and the user has no AI access."""
+        from app.services.llm_client import llm_client  # llm_client imports this module
+        if llm_client.is_live and not cls.has_ai_access(user):
+            raise AIAccessDenied()
+
     @classmethod
     async def effective_limit(cls, db: AsyncSession, user: User) -> int:
         return user.token_limit if user.token_limit is not None else await cls.default_limit(db)
@@ -83,6 +104,7 @@ class UsageService:
             "percent": 0.0 if limit == 0 else round(min(100.0, used / limit * 100), 1),
             "unlimited": limit == 0,
             "custom_limit": user.token_limit is not None,
+            "ai_access": cls.has_ai_access(user),
             "period_start": cls.period_start(),
             "resets_at": cls.period_end(),
         }
@@ -96,6 +118,7 @@ class UsageService:
     @classmethod
     async def check_budget(cls, db: AsyncSession, user: User, estimate: int, what: str) -> None:
         """Refuse a job up front if its estimated token cost would exceed the user's remaining budget."""
+        cls.require_ai_access(user)
         left = await cls.remaining(db, user)
         if left is not None and estimate > left:
             raise HTTPException(
@@ -107,7 +130,7 @@ class UsageService:
     # ------------------------------------------------------------------ hooks for the LLM layer
     @classmethod
     async def ensure_quota(cls) -> None:
-        """Raise ``QuotaExceeded`` if the current request's user is over budget (checked once per request)."""
+        """Raise ``AIAccessDenied`` or ``QuotaExceeded`` for the current request's user (checked once per request)."""
         actor = current_actor.get()
         if not actor or not actor.user_id:
             return
@@ -117,11 +140,14 @@ class UsageService:
                 async with cls.session_factory() as db:
                     user = await db.get(User, actor.user_id)
                     if user:
+                        actor.no_access = not cls.has_ai_access(user)
                         limit = await cls.effective_limit(db, user)
                         actor.over_quota = limit > 0 and await cls.used_this_period(db, user.id) >= limit
                         actor.limit = limit
             except Exception:  # metering must never take the product down
                 logger.exception("Quota check failed; allowing the call")
+        if actor.no_access:
+            raise AIAccessDenied()
         if actor.over_quota:
             raise QuotaExceeded(actor.limit)
 
