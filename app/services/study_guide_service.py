@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote_plus, urlparse
 import uuid
@@ -47,9 +48,14 @@ class StudyGuideService:
             from app.services.chapter_sources import material_context
             subject = await db.get(Subject, chapter.subject_id)
             subject_name = subject.name if subject else ""
+            from app.services.resource_finder import ResourceFinder
             ctx = await material_context(db, chapter, f"{chapter.title} {subject_name}")
-            generated = await cls.generate_guide(chapter.title, subject_name, chapter.estimated_hours or 1.0,
-                                                 source_block=ctx["prompt_block"] if ctx else None)
+            # Searching the web for videos and articles runs alongside writing the guide.
+            generated, found = await asyncio.gather(
+                cls.generate_guide(chapter.title, subject_name, chapter.estimated_hours or 1.0,
+                                   source_block=ctx["prompt_block"] if ctx else None),
+                ResourceFinder.find(chapter.title, subject_name),
+            )
             guide = ChapterGuide(
                 chapter_id=chapter.id,
                 overview=generated["overview"],
@@ -60,9 +66,24 @@ class StudyGuideService:
             db.add(guide)
             # Keep links the learner added before the guide existed.
             user_links = [r for r in (chapter.resources or []) if r.get("source") == "user"]
-            chapter.resources = generated["resources"] + cls.search_links(chapter.title, subject_name) + user_links
+            # Verified finds replace the model's from-memory suggestions, which may be stale.
+            chapter.resources = (found or generated["resources"]) + cls.search_links(chapter.title, subject_name) + user_links
             await db.flush()
         return cls.serialize(chapter, guide)
+
+    @classmethod
+    async def refresh_resources(cls, db: AsyncSession, chapter: Chapter) -> int:
+        """Search the web again for this chapter. Replaces the AI picks only when the new search verifies something,
+        and always keeps search and learner links. Returns how many links were found."""
+        from app.services.resource_finder import ResourceFinder
+        guide = (await db.execute(select(ChapterGuide).where(ChapterGuide.chapter_id == chapter.id))).scalar_one_or_none()
+        subject = await db.get(Subject, chapter.subject_id)
+        found = await ResourceFinder.find(chapter.title, subject.name if subject else "", (guide.objectives if guide else None) or [])
+        if found:
+            kept = [r for r in (chapter.resources or []) if r.get("source") != "ai"]
+            chapter.resources = found + kept
+            await db.flush()
+        return len(found)
 
     @staticmethod
     def serialize(chapter: Chapter, guide: ChapterGuide) -> Dict[str, Any]:

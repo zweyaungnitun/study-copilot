@@ -31,6 +31,7 @@ class LLMResult:
     parts: List[Dict[str, Any]] = field(default_factory=list)
     usage: Dict[str, int] = field(default_factory=dict)
     finish_reason: Optional[str] = None
+    sources: List[Dict[str, str]] = field(default_factory=list)  # web pages a search-grounded answer drew on: {uri, title}
 
     @property
     def text(self) -> str:
@@ -210,6 +211,7 @@ class LLMClient:
         thinking_budget: Optional[int],
         tool_mode: str,
         model: str = "",
+        search: bool = False,
     ) -> Dict[str, Any]:
         cfg: Dict[str, Any] = {"temperature": temperature, "maxOutputTokens": max_tokens}
         thinking = self._thinking(model, thinking_budget)
@@ -224,6 +226,9 @@ class LLMClient:
         if tools:
             payload["tools"] = [{"functionDeclarations": tools}]
             payload["toolConfig"] = {"functionCallingConfig": {"mode": tool_mode}}
+        if search:
+            # Grounding with Google Search: the model searches the live web and reports what it used.
+            payload.setdefault("tools", []).append({"google_search": {}})
         return payload
 
     @staticmethod
@@ -247,15 +252,16 @@ class LLMClient:
         json_mode: bool = False,
         thinking_budget: Optional[int] = 0,
         tool_mode: str = "AUTO",
+        search: bool = False,
     ) -> Optional[LLMResult]:
-        """One non-streaming call over a full multi-turn ``contents`` list."""
+        """One non-streaming call over a full multi-turn ``contents`` list. ``search`` grounds it in Google Search."""
         obs = tracing.start("gemini.generate", model=self._resolve(model),
                             input=tracing.content({"system": system_prompt, "contents": contents, "tools": tools}),
                             model_parameters={"temperature": temperature, "max_tokens": max_tokens,
                                               "json_mode": json_mode, "thinking_budget": thinking_budget})
         try:
             result = await self._generate(contents, system_prompt, tools, model, temperature, max_tokens,
-                                          json_mode, thinking_budget, tool_mode)
+                                          json_mode, thinking_budget, tool_mode, search)
         except Exception as e:
             tracing.end(obs, error=f"{type(e).__name__}: {e}")
             raise
@@ -267,27 +273,30 @@ class LLMClient:
         return result
 
     async def _generate(self, contents, system_prompt, tools, model, temperature, max_tokens, json_mode,
-                        thinking_budget, tool_mode) -> Optional[LLMResult]:
+                        thinking_budget, tool_mode, search=False) -> Optional[LLMResult]:
         model_name = self._resolve(model)
         if self.is_live:
             await UsageService.ensure_quota()
         started = time.perf_counter()
         data, status = await self._post_status(
             f"models/{model_name}:generateContent",
-            self._payload(contents, system_prompt, tools, temperature, max_tokens, json_mode, thinking_budget, tool_mode, model_name),
+            self._payload(contents, system_prompt, tools, temperature, max_tokens, json_mode, thinking_budget, tool_mode, model_name, search),
         )
         if data is None and self._learn_thinking(model_name, status, getattr(self, "_last_error", "")):
             return await self._generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
-                                        json_mode, thinking_budget, tool_mode)
+                                        json_mode, thinking_budget, tool_mode, search)
         if data is None and self._retire(model_name, status):
             return await self._generate(contents, system_prompt, tools, model_name, temperature, max_tokens,
-                                        json_mode, thinking_budget, tool_mode)
+                                        json_mode, thinking_budget, tool_mode, search)
         if not data or not data.get("candidates"):
             if data:
                 logger.warning("Gemini returned no candidates: %s", str(data.get("promptFeedback"))[:200])
             return None
         cand = data["candidates"][0]
-        result = LLMResult(cand.get("content", {}).get("parts", []) or [], self._usage(data), cand.get("finishReason"))
+        sources = [{"uri": c["web"]["uri"], "title": c["web"].get("title", "")}
+                   for c in (cand.get("groundingMetadata") or {}).get("groundingChunks") or []
+                   if isinstance(c, dict) and isinstance(c.get("web"), dict) and c["web"].get("uri")]
+        result = LLMResult(cand.get("content", {}).get("parts", []) or [], self._usage(data), cand.get("finishReason"), sources)
         logger.info("llm model=%s ms=%d usage=%s finish=%s", model_name,
                     (time.perf_counter() - started) * 1000, result.usage, result.finish_reason)
         await UsageService.record(model_name, result.usage)

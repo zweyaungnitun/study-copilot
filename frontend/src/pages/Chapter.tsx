@@ -5,7 +5,7 @@ import { useLoad } from '../hooks'
 import { celebrate } from '../celebrate'
 import { Empty, ErrorBox, Icon, type IconName, Markdown, PageHeader, ProgressBar, Segmented, Skeleton, Spinner, useToast } from '../ui'
 
-const resourceIcon: Record<string, IconName> = { video: 'spark', article: 'file', docs: 'book', course: 'map', practice: 'target', search: 'search', link: 'arrow' }
+const resourceIcon: Record<string, IconName> = { video: 'play', article: 'file', docs: 'book', course: 'map', practice: 'target', search: 'search', link: 'arrow' }
 
 function LearningPath({ guide }: { guide: StudyGuide }) {
   return (
@@ -26,11 +26,18 @@ function LearningPath({ guide }: { guide: StudyGuide }) {
   )
 }
 
+const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } }
+
+/** Videos and articles for the chapter: AI-found (from a live web search, each link checked), search shortcuts and the learner's own. */
 function Resources({ chapterId, links, onChange }: { chapterId: string; links: ResourceLink[]; onChange: (l: ResourceLink[]) => void }) {
   const toast = useToast()
   const [label, setLabel] = useState('')
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
+  const [finding, setFinding] = useState(false)
+  const videos = links.filter(l => l.type === 'video' && l.thumbnail)
+  const reads = links.filter(l => l.source !== 'search' && !(l.type === 'video' && l.thumbnail))
+  const searches = links.filter(l => l.source === 'search')
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
@@ -41,25 +48,64 @@ function Resources({ chapterId, links, onChange }: { chapterId: string; links: R
     try { await api.deleteResource(chapterId, id); onChange(links.filter(l => l.id !== id)) }
     catch (err) { toast('err', (err as Error).message) }
   }
+  const find = async () => {
+    setFinding(true)
+    try {
+      const r = await api.discoverResources(chapterId)
+      onChange(r.resources)
+      toast(r.found ? 'ok' : 'err', r.found ? `Found ${r.found} checked link${r.found > 1 ? 's' : ''} for this chapter` : 'Couldn’t find new links right now. Your links are unchanged.')
+    } catch (err) { toast('err', (err as Error).message) } finally { setFinding(false) }
+  }
+  const removeBtn = (l: ResourceLink) => <button className="res-remove" aria-label={`Remove ${l.label}`} title="Remove" onClick={() => remove(l.id)}><Icon name="x" size={14} /></button>
+
   return (
-    <div className="card">
-      <div className="card-head"><h2>Resources</h2></div>
-      <div className="list">
-        {links.map(l => <div key={l.id} className="item">
-          <a href={l.url} target="_blank" rel="noopener noreferrer" className="row" style={{ gap: 10, minWidth: 0 }}>
-            <Icon name={resourceIcon[l.type] || 'arrow'} size={16} /><span>{l.label}</span>
-            {l.source === 'user' && <span className="badge">Yours</span>}
-            {l.source === 'search' && <span className="badge gray">Search</span>}</a>
-          <button className="ghost sm" aria-label={`Remove ${l.label}`} onClick={() => remove(l.id)}><Icon name="x" size={14} /></button>
-        </div>)}
-        {!links.length && <p className="muted">No links yet.</p>}
+    <section className="card res" aria-label="Watch and read" aria-busy={finding}>
+      <div className="card-head res-head">
+        <div><h2><span className="th-icon tone-violet"><Icon name="play" size={16} /></span>Watch &amp; read</h2>
+          <p className="muted">Videos and articles picked by AI from a live web search. Every link is checked before it’s shown.</p></div>
+        <button className="ghost" onClick={find} disabled={finding}>{finding ? <Spinner /> : <Icon name="wand" size={16} />}{finding ? 'Searching the web…' : 'Find with AI'}</button>
       </div>
-      <form className="row" onSubmit={add} style={{ marginTop: 14 }}>
-        <input placeholder="Title (optional)" value={label} onChange={e => setLabel(e.target.value)} maxLength={200} style={{ flex: '1 1 160px' }} />
-        <input placeholder="https://…" type="url" required value={url} onChange={e => setUrl(e.target.value)} style={{ flex: '2 1 220px' }} />
-        <button className="ghost" disabled={busy || !url.trim()}>{busy ? <Spinner /> : <Icon name="plus" size={16} />}Add link</button>
-      </form>
-    </div>
+
+      {finding && !videos.length && <div className="res-videos">{[0, 1, 2].map(i => <div key={i} className="res-video ghosted"><span className="res-thumb skeleton" /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '45%' }} /></div>)}</div>}
+      {videos.length > 0 && <div className={`res-videos ${finding ? 'dim' : ''}`}>{videos.map((l, i) => (
+        <article key={l.id} className="res-video" style={{ animationDelay: `${i * 0.06}s` }}>
+          <a href={l.url} target="_blank" rel="noopener noreferrer" className="res-thumb">
+            <img src={l.thumbnail!} alt="" loading="lazy" referrerPolicy="no-referrer" />
+            <span className="res-play" aria-hidden="true"><Icon name="play" size={20} /></span>
+            <span className="res-yt">YouTube</span>
+          </a>
+          <a href={l.url} target="_blank" rel="noopener noreferrer" className="res-title">{l.label}</a>
+          {l.author && <span className="res-by">{l.author}</span>}
+          {l.note && <p className="res-note"><Icon name="spark" size={12} />{l.note}</p>}
+          {removeBtn(l)}
+        </article>))}</div>}
+
+      {reads.length > 0 && <ul className={`res-reads ${finding ? 'dim' : ''}`}>{reads.map((l, i) => {
+        const site = l.author || hostOf(l.url)
+        return <li key={l.id} className="res-read" style={{ animationDelay: `${0.1 + i * 0.05}s` }}>
+          <span className="res-site" aria-hidden="true">{l.type === 'video' ? <Icon name="play" size={15} /> : site[0]?.toUpperCase()}</span>
+          <div className="res-read-body">
+            <a href={l.url} target="_blank" rel="noopener noreferrer" className="res-title">{l.label}<Icon name="external" size={13} /></a>
+            <span className="res-by">{site}{l.source === 'user' && <span className="badge">Yours</span>}</span>
+            {l.note && <p className="res-note"><Icon name="spark" size={12} />{l.note}</p>}
+          </div>
+          {removeBtn(l)}
+        </li>
+      })}</ul>}
+
+      {!videos.length && !reads.length && !finding && <div className="res-empty"><Icon name="wand" size={18} /><span>No picks yet. <b>Find with AI</b> searches the web for videos and articles on this chapter.</span></div>}
+
+      {searches.length > 0 && <div className="res-search"><span className="muted">Search more</span>
+        {searches.map(l => <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className="tile-chip"><Icon name={resourceIcon[l.type] || 'search'} size={12} />{l.label}</a>)}</div>}
+
+      <details className="res-add"><summary><Icon name="plus" size={14} />Add your own link</summary>
+        <form className="row" onSubmit={add}>
+          <input placeholder="Title (optional)" value={label} onChange={e => setLabel(e.target.value)} maxLength={200} style={{ flex: '1 1 160px' }} />
+          <input placeholder="https://…" type="url" required value={url} onChange={e => setUrl(e.target.value)} style={{ flex: '2 1 220px' }} />
+          <button className="ghost" disabled={busy || !url.trim()}>{busy ? <Spinner /> : <Icon name="plus" size={16} />}Add link</button>
+        </form>
+      </details>
+    </section>
   )
 }
 
@@ -124,11 +170,11 @@ export default function ChapterPage() {
       {guide.loading ? <div className="card"><Skeleton lines={4} /></div>
         : guide.data ? <LearningPath guide={guide.data} />
         : guide.error ? <ErrorBox>{guide.error}</ErrorBox> : null}
+      {guide.data && <Resources chapterId={id!} links={guide.data.resources} onChange={resources => guide.setData({ ...guide.data!, resources })} />}
       <div style={{ marginBottom: 16 }}><Segmented label="Detail level" value={tier} onChange={setTier} options={tiers} /></div>
       {notes.loading ? <><p className="muted" style={{ marginBottom: 12 }}>Writing your notes for “{c.title}” — this takes a few seconds the first time.</p><Skeleton lines={5} /></>
         : notes.error || !notes.data ? <ErrorBox>{notes.error || 'Could not load notes.'}</ErrorBox>
         : <div className="card" style={{ padding: 28 }}>{notes.data[tier] ? <Markdown text={notes.data[tier]!} /> : <p className="muted">Nothing here yet.</p>}</div>}
-      {guide.data && <Resources chapterId={id!} links={guide.data.resources} onChange={resources => guide.setData({ ...guide.data!, resources })} />}
       <div className="card"><div className="card-head"><h2>Mastery</h2><b className="num">{Math.round(c.mastery_score)}%</b></div>
         <ProgressBar value={c.mastery_score} tone="green" />
         <p className="muted" style={{ marginTop: 8 }}>Mark the chapter complete once you've worked through the notes and practice.</p></div>

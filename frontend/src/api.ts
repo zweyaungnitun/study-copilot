@@ -61,7 +61,8 @@ export interface DiscussReply { reply: string; proposal: Proposal | null; sessio
 export interface ChatSummary { id: string; kind: 'tutor' | 'roadmap' | 'design'; chapter_id?: string; title: string; updated_at: string; message_count: number }
 export interface ChatMsg { id: string; role: 'user' | 'ai'; content: string; meta: Record<string, unknown>; created_at: string }
 export interface ChatDetail extends ChatSummary { messages: ChatMsg[] }
-export interface ResourceLink { id: string; type: string; label: string; url: string; source: 'ai' | 'search' | 'user' }
+/** thumbnail/author/note are set on links the AI found and verified (author = YouTube channel or the article's site). */
+export interface ResourceLink { id: string; type: string; label: string; url: string; source: 'ai' | 'search' | 'user'; thumbnail?: string | null; author?: string | null; note?: string | null }
 export interface StudyGuide { chapter_id: string; overview: string; objectives: string[]; lesson_steps: { title: string; minutes: number; activity: string }[]; practice: string[]; resources: ResourceLink[] }
 export interface Note { chapter_id: string; simple_content: string; detailed_content: string; exam_content: string; cheat_sheet?: string }
 export interface Task { id: string; type: string; title: string; estimated_minutes: number; chapter_id?: string }
@@ -201,6 +202,8 @@ export const api = {
   notes: (chapter_id: string) => get<Note>(`/chapters/${chapter_id}/notes`),
   guide: (chapter_id: string) => get<StudyGuide>(`/chapters/${chapter_id}/guide`),
   addResource: (chapter_id: string, b: { label: string; url: string; type?: string }) => post<ResourceLink>(`/chapters/${chapter_id}/resources`, b),
+  /** Searches the web for videos and articles on the chapter; every link is checked before it's kept. */
+  discoverResources: (chapter_id: string) => post<{ found: number; resources: ResourceLink[] }>(`/chapters/${chapter_id}/resources/discover`),
   deleteResource: (chapter_id: string, id: string) => request<void>(`/chapters/${chapter_id}/resources/${id}`, { method: 'DELETE' }),
   startSession: (user_id: string, energy_level: string) => post<SessionStart>('/session/start', { user_id, energy_level }),
   endSession: (b: Record<string, unknown>) => post<SessionEnd>('/session/end', b),

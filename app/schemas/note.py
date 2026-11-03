@@ -47,6 +47,14 @@ class ResourceLink(BaseModel):
     label: str
     url: str
     source: str = "ai"  # ai, search, user
+    thumbnail: Optional[str] = None  # videos: preview image
+    author: Optional[str] = None     # videos: channel; articles: site
+    note: Optional[str] = None       # why the AI picked it
+
+
+class ResourceDiscoverResponse(BaseModel):
+    found: int
+    resources: list[ResourceLink]
 
 
 class LessonStep(BaseModel):

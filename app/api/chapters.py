@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.models.entities import Chapter, Roadmap, Subject
 from app.schemas.note import (
     ChapterCompleteResponse,
@@ -11,6 +12,7 @@ from app.schemas.note import (
     NoteResponse,
     NoteTierContentResponse,
     ResourceCreateRequest,
+    ResourceDiscoverResponse,
     ResourceLink,
     StudyGuideResponse,
 )
@@ -138,6 +140,16 @@ async def add_resource(chapter_id: str, request: ResourceCreateRequest, db: Asyn
     chapter.resources = [*(chapter.resources or []), resource]  # reassign so the JSON column is marked dirty
     await db.flush()
     return resource
+
+
+@router.post("/{chapter_id}/resources/discover", response_model=ResourceDiscoverResponse)
+async def discover_resources(chapter_id: str, _user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Search the web for videos and articles on this chapter; every link is checked before it's kept."""
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    found = await StudyGuideService.refresh_resources(db, chapter)
+    return {"found": found, "resources": chapter.resources or []}
 
 
 @router.delete("/{chapter_id}/resources/{resource_id}", status_code=204)
